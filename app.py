@@ -37,7 +37,7 @@ def vonage_whatsapp():
         payload = {
             "from": {
                 "type": "whatsapp",
-                "number": "+14157386102"  # ✅ Your exact Vonage sandbox number
+                "number": "14157386102"  # ✅ Your exact Vonage sandbox number
             },
             "to": {
                 "type": "whatsapp",
