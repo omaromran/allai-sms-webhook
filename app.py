@@ -6,6 +6,8 @@ import requests
 import json
 from triage_engine import classify_issue, should_bypass_landlord
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 CORS(app)
@@ -105,6 +107,8 @@ def vonage_whatsapp():
 
         triage = classify_issue(msg)
         should_escalate = should_bypass_landlord(triage)
+        if should_escalate:
+             notify_l1_via_gmail(issue_id, msg[:50], triage["category"], triage["urgency"], record_id)
         resolved = is_resolved(msg)
 
         issue_id, record_id, is_new = get_or_create_issue(user_number, msg, triage)
@@ -224,3 +228,31 @@ def message_status():
     data = request.get_json()
     print("📦 Message status update:", json.dumps(data, indent=2))
     return "ok"
+
+
+def notify_l1_via_gmail(issue_id, summary, category, urgency, record_id):
+    gmail_user = os.environ["GMAIL_USER"]
+    gmail_pass = os.environ["GMAIL_APP_PASS"]
+    to_email = os.environ.get("L1_EMAIL", "landlord@example.com")  # Optional: store this in Render too
+
+    airtable_link = f"https://airtable.com/{AIRTABLE_BASE_ID}/{record_id}"
+    body = f"""
+    🚨 Escalated Maintenance Issue: {issue_id}
+
+    Summary: {summary}
+    Category: {category}
+    Urgency: {urgency}
+
+    View in Airtable: {airtable_link}
+    """
+
+    msg = MIMEText(body)
+    msg["Subject"] = f"🚨 Escalated Issue: {issue_id}"
+    msg["From"] = gmail_user
+    msg["To"] = to_email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(gmail_user, gmail_pass)
+        server.send_message(msg)
+
+    print("📧 L1 email alert sent via Gmail")
