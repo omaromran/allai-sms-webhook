@@ -89,7 +89,7 @@ def log_issue_to_airtable(record_id, new_message, mark_resolved=False):
     except Exception as e:
         print("❌ Airtable update failed:", str(e))
 
-@app.route("/vonage/whatsapp", methods=["POST"])
+@app.route("/messages", methods=["POST"])
 def vonage_whatsapp():
     data = request.get_json()
     print("Incoming WhatsApp:", data)
@@ -142,17 +142,13 @@ def vonage_whatsapp():
             payload = {
                 "from": {"type": "messenger", "id": "699775536544257"},
                 "to": {"type": "messenger", "id": data["from"]},
-                "message": {
-                    "content": {"type": "text", "text": reply}
-                }
+                "message": {"content": {"type": "text", "text": reply}}
             }
         elif channel == "whatsapp":
             payload = {
                 "from": {"type": "whatsapp", "number": "15557817931"},
                 "to": {"type": "whatsapp", "number": data["from"]},
-                "message": {
-                    "content": {"type": "text", "text": reply}
-                }
+                "message": {"content": {"type": "text", "text": reply}}
             }
 
 
@@ -170,52 +166,7 @@ def vonage_whatsapp():
         print("Error:", e)
         return "error", 500
 
-@app.route("/messenger", methods=["POST"])
-def handle_messenger():
-    data = request.get_json()
-    print("📥 Incoming Messenger message:", json.dumps(data, indent=2))
 
-    try:
-        msg = data.get("text")
-        user_id = data.get("from")
-        channel = data.get("channel")
-
-        # Basic GPT reply (you can add triage logic later)
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are Allai, an AI assistant helping tenants with maintenance."},
-                {"role": "user", "content": msg}
-            ]
-        )
-        reply = response.choices[0].message.content
-
-        # Build outbound payload
-        payload = {
-            "from": {
-                "type": "messenger",
-                "id": "699775536544257"  # Your Page ID
-            },
-            "to": {
-                "type": "messenger",
-                "id": user_id
-            },
-            "message": {
-                "content": {
-                    "type": "text",
-                    "text": reply
-                }
-            }
-        }
-
-        r = requests.post("https://api.nexmo.com/v0.1/messages", json=payload, auth=(VONAGE_API_KEY, VONAGE_API_SECRET))
-        print("Messenger send status:", r.status_code, r.text)
-
-        return "ok", 200
-
-    except Exception as e:
-        print("❌ Messenger handler error:", str(e))
-        return "error", 500
 
 @app.route("/media-upload", methods=["POST"])
 def media_upload():
