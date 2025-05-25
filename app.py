@@ -136,42 +136,24 @@ def vonage_whatsapp():
             log_issue_to_airtable(record_id, msg)
 
         
-        # Whatsapp
-        # payload = {
-        #     "from": {
-        #         "type": "whatsapp",
-        #         "number": "15557817931"
-        #     },
-        #     "to": {
-        #         "type": "whatsapp",
-        #         "number": user_number
-        #     },
-        #     "message": {
-        #         "content": {
-        #             "type": "text",
-        #             "text": reply
-        #         }
-        #     }
-        # }
+        channel = data.get("channel")
 
-
-        #Messenger
-        payload = {
-            "from": {
-                "type": "messenger",
-                "id": "699775536544257"  # ✅ Your Facebook Page ID
-            },
-            "to": {
-                "type": "messenger",
-                "id": sender_id  # PSID from the incoming message
-            },
-            "message": {
-                "content": {
-                "type": "text",
-                "text": reply  # The GPT or fallback response
+        if channel == "messenger":
+            payload = {
+                "from": {"type": "messenger", "id": "699775536544257"},
+                "to": {"type": "messenger", "id": data["from"]},
+                "message": {
+                    "content": {"type": "text", "text": reply}
                 }
             }
-        }
+        elif channel == "whatsapp":
+            payload = {
+                "from": {"type": "whatsapp", "number": "15557817931"},
+                "to": {"type": "whatsapp", "number": data["from"]},
+                "message": {
+                    "content": {"type": "text", "text": reply}
+                }
+            }
 
 
         response = requests.post(
