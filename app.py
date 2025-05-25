@@ -27,6 +27,40 @@ L1_EMAIL = os.environ.get("L1_EMAIL", "landlord@example.com")
 
 # ... (unchanged utility functions above) ...
 
+def get_or_create_issue(phone, message, triage):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "filterByFormula": f"AND({{Phone}}='{phone}', OR({{Status}}='Open', {{Status}}='Escalated'))"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    records = response.json().get("records", [])
+
+    if records and not is_new_issue(message):
+        issue_id = records[0]["fields"].get("Issue ID", "Unknown")
+        record_id = records[0]["id"]
+        print(f"📌 Found existing issue ID: {issue_id}")
+        return issue_id, record_id, False
+
+    issue_id = generate_issue_id()
+    fields = {
+        "Issue ID": issue_id,
+        "Phone": phone,
+        "Message Summary": message[:50],
+        "Message": message,
+        "Category": triage["category"],
+        "Urgency": triage["urgency"],
+        "Escalated": triage["should_escalate"],
+        "Follow-ups": "\n".join(triage["followup_questions"]),
+        "Status": "Open"
+    }
+    create_response = requests.post(url, headers=headers, json={"fields": fields})
+    print("🆕 Created new issue with ID:", issue_id)
+    return issue_id, create_response.json().get("id"), True
+
 @app.route("/messages", methods=["POST"])
 def vonage_whatsapp():
     data = request.get_json()
