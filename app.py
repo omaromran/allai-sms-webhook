@@ -24,7 +24,7 @@ def vonage_whatsapp():
 
         print("Message from WhatsApp user:", msg)
 
-        # Generate GPT response
+        # Generate GPT-4o response
         gpt_reply = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -33,25 +33,29 @@ def vonage_whatsapp():
             ]
         ).choices[0].message.content
 
-        # Send AI reply back to WhatsApp via Vonage API
-        response = requests.post("https://messages-sandbox.nexmo.com/v1/messages",
-            json={
-                "from": {
-                    "type": "whatsapp",
-                    "number": "+14157386102"  # Your sandbox number
-                },
-                "to": {
-                    "type": "whatsapp",
-                    "number": user_number
-                },
-                "message": {
-                    "content": {
-                        "type": "text",
-                        "text": gpt_reply
-                    }
-                }
+        # Build proper payload
+        payload = {
+            "from": {
+                "type": "whatsapp",
+                "number": "+14157386102"  # ✅ Your exact Vonage sandbox number
             },
-            auth=(os.environ["VONAGE_API_KEY"], os.environ["VONAGE_API_SECRET"])
+            "to": {
+                "type": "whatsapp",
+                "number": user_number
+            },
+            "message": {
+                "content": {
+                    "type": "text",
+                    "text": gpt_reply
+                }
+            }
+        }
+
+        # Send reply through Vonage Sandbox API
+        response = requests.post(
+            "https://messages-sandbox.nexmo.com/v0.1/messages",
+            json=payload,
+            auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
         )
 
         print("Vonage send status:", response.status_code, response.text)
