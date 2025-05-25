@@ -138,7 +138,7 @@ def vonage_whatsapp():
         payload = {
             "from": {
                 "type": "whatsapp",
-                "number": "14157386102"
+                "number": "15557817931"
             },
             "to": {
                 "type": "whatsapp",
@@ -153,7 +153,7 @@ def vonage_whatsapp():
         }
 
         response = requests.post(
-            "https://messages-sandbox.nexmo.com/v0.1/messages",
+            "https://api.nexmo.com/v0.1/messages",
             json=payload,
             auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
         )
