@@ -34,15 +34,23 @@ def vonage_whatsapp():
         ).choices[0].message.content
 
         # Send AI reply back to WhatsApp via Vonage API
+        import json
+        print("Sending payload:", json.dumps({...}, indent=2))
         response = requests.post("https://api.nexmo.com/v0.1/messages", json={
-            "from": {"type": "whatsapp", "number": "+14157386102"},
-            "to": {"type": "whatsapp", "number": user_number},
-            "message": {
-                "content": {
-                    "type": "text",
-                    "text": gpt_reply
+                "from": {
+                    "type": "whatsapp",
+                    "number": "+14157386102"  # ✅ YOUR sandbox number
+                },
+                "to": {
+                    "type": "whatsapp",
+                    "number": user_number     # ✅ Incoming user number from payload
+                },
+                "message": {
+                    "content": {
+                        "type": "text",
+                        "text": gpt_reply
+                    }
                 }
-            }
         }, auth=(os.environ["VONAGE_API_KEY"], os.environ["VONAGE_API_SECRET"]))
 
         print("Vonage send status:", response.status_code, response.text)
