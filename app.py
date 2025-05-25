@@ -12,22 +12,25 @@ def index():
     
 @app.route("/sms", methods=["POST"])
 def sms_reply():
-    incoming_msg = request.form['Body']
-    phone = request.form['From']
+    incoming_msg = request.form.get("Body", "")
+    phone = request.form.get("From", "")
+
+    print("Received message:", incoming_msg)
 
     try:
         completion = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Allai, an AI assistant helping tenants report maintenance issues..."},
+                {"role": "system", "content": "You are Allai, a helpful AI assistant for tenants..."},
                 {"role": "user", "content": incoming_msg}
             ]
         )
         reply = completion.choices[0].message["content"]
+        print("AI Response:", reply)
 
     except Exception as e:
-        print("Error from OpenAI:", e)
-        reply = "Sorry, something went wrong while processing your request. Please try again later."
+        print("❌ OpenAI API Error:", str(e))  # This will show you exactly what went wrong
+        reply = "Sorry, something went wrong while processing your request."
 
     resp = MessagingResponse()
     resp.message(reply)
