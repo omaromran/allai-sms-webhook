@@ -72,13 +72,21 @@ def vonage_whatsapp():
         triage = classify_issue(msg)
         should_escalate = should_bypass_landlord(triage)
 
-        # Build GPT prompt
+        # Escalation-based language
+        escalation_instruction = (
+            "This issue is urgent and requires escalation to a human. "
+            "Let the tenant know it’s being escalated. Be clear and calm."
+            if should_escalate else
+            "This issue is not considered urgent. Ask follow-up questions to better understand the situation."
+        )
+        
+        # GPT prompt
         triage_prompt = (
-            f"You are Allai, a tenant assistant trained in property maintenance triage.\n"
+            f"You are Allai, a professional assistant trained in property maintenance triage.\n"
             f"The issue appears to relate to: {triage['category']}.\n"
-            f"It is {'urgent' if triage['urgency'] == 'high' else 'non-urgent'}.\n"
-            f"Ask the following questions to gather more information:\n"
-            f"- " + "\n- ".join(triage["followup_questions"])
+            f"{escalation_instruction}\n"
+            f"Ask the following:\n"
+            f"- " + "\n- ".join(triage['followup_questions'])
         )
 
         gpt_reply = client.chat.completions.create(
