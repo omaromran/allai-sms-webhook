@@ -51,6 +51,8 @@ def vonage_whatsapp():
             }
         }
 
+        print("User Number:", user_number)
+
         # Send reply through Vonage Sandbox API
         response = requests.post(
             "https://messages-sandbox.nexmo.com/v0.1/messages",
