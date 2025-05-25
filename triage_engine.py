@@ -21,6 +21,8 @@ def classify_issue(text):
     for category, data in KB.items():
         if any(keyword in text for keyword in data["keywords"]):
             emergency = any(trigger in text for trigger in data["emergency_triggers"])
+            if emergency:
+                print("⚠️ Emergency trigger detected. Escalating to L1.")
             return {
                 "category": category,
                 "urgency": "high" if emergency else "normal",
@@ -43,9 +45,12 @@ def is_weekend():
 
 def should_bypass_landlord(escalation_info, media_present=False):
     if escalation_info["should_escalate"]:
+        print("⚠️ Escalation due to emergency condition.")
         return True
     if is_after_hours() or is_weekend():
+        print("⏰ Escalation due to time condition (after-hours or weekend).")
         return True
     if ESCALATION_RULES["require_media_to_confirm"] and not media_present:
+        print("📸 Escalation requires media confirmation but none provided.")
         return False
     return False
