@@ -17,31 +17,38 @@ def vonage_whatsapp():
     data = request.get_json()
     print("Incoming WhatsApp:", data)
 
-    # Extract message and sender
-    msg = data['message']['content']['text']
-    to = data['from']['number']
-    from_ = data['to']['number']
+    try:
+        # Vonage sends message text directly as 'text'
+        msg = data.get("text")
+        user_number = data.get("from")
+        app_number = data.get("to")
 
-    # Get AI reply
-    gpt_reply = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are Allai, a helpful assistant for tenant maintenance issues."},
-            {"role": "user", "content": msg}
-        ]
-    ).choices[0].message.content
+        print("Message from WhatsApp user:", msg)
 
-    # Send back reply via Vonage Messages API
-    response = requests.post("https://api.nexmo.com/v0.1/messages", json={
-        "from": {"type": "whatsapp", "number": from_},
-        "to": {"type": "whatsapp", "number": to},
-        "message": {
-            "content": {
-                "type": "text",
-                "text": gpt_reply
+        # Generate GPT response
+        gpt_reply = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are Allai, an assistant that helps tenants report maintenance issues."},
+                {"role": "user", "content": msg}
+            ]
+        ).choices[0].message.content
+
+        # Send AI reply back to WhatsApp via Vonage API
+        response = requests.post("https://api.nexmo.com/v0.1/messages", json={
+            "from": {"type": "whatsapp", "number": app_number},
+            "to": {"type": "whatsapp", "number": user_number},
+            "message": {
+                "content": {
+                    "type": "text",
+                    "text": gpt_reply
+                }
             }
-        }
-    }, auth=(VONAGE_API_KEY, VONAGE_API_SECRET))
+        }, auth=(os.environ["VONAGE_API_KEY"], os.environ["VONAGE_API_SECRET"]))
 
-    print("Vonage send response:", response.status_code, response.text)
-    return "ok"
+        print("Vonage send status:", response.status_code, response.text)
+        return "ok"
+
+    except Exception as e:
+        print("Error:", e)
+        return "error", 500
