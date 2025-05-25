@@ -21,7 +21,6 @@ def vonage_whatsapp():
         # Vonage sends message text directly as 'text'
         msg = data.get("text")
         user_number = data.get("from")
-        app_number = data.get("to")
 
         print("Message from WhatsApp user:", msg)
 
@@ -36,7 +35,7 @@ def vonage_whatsapp():
 
         # Send AI reply back to WhatsApp via Vonage API
         response = requests.post("https://api.nexmo.com/v0.1/messages", json={
-            "from": {"type": "whatsapp", "number": app_number},
+            "from": {"type": "whatsapp", "number": "14157386170"},
             "to": {"type": "whatsapp", "number": user_number},
             "message": {
                 "content": {
