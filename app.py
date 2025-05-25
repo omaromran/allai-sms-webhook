@@ -137,8 +137,8 @@ def vonage_whatsapp():
 
             # Append media upload link for visual categories
             if triage["category"] in VISUAL_CATEGORIES:
-                reply += "\n\n📸 If possible, please upload a photo or video of the issue here:\nhttps://allai-upload.web.app"
-                
+                reply += f"\n\n📸 If possible, upload a photo or video of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}"
+
             log_issue_to_airtable(record_id, msg)
 
         
