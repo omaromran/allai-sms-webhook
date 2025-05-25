@@ -11,6 +11,9 @@ client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 VONAGE_API_KEY = os.environ["VONAGE_API_KEY"]
 VONAGE_API_SECRET = os.environ["VONAGE_API_SECRET"]
+AIRTABLE_TOKEN = os.environ["AIRTABLE_TOKEN"]
+AIRTABLE_BASE_ID = os.environ["AIRTABLE_BASE_ID"]
+AIRTABLE_TABLE_NAME = "Issues"
 
 # Load knowledge base
 with open("knowledge_base.json") as f:
@@ -57,6 +60,33 @@ def should_bypass_landlord(escalation_info, media_present=False):
         return False
     return False
 
+def log_issue_to_airtable(phone, message, category, urgency, escalated, followups, media_links=[]):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    fields = {
+        "Message Summary": message[:50],
+        "Phone": phone,
+        "Message": message,
+        "Category": category,
+        "Urgency": urgency,
+        "Escalated": escalated,
+        "Follow-ups": "\n".join(followups)
+    }
+    if media_links:
+        fields["Media"] = [{"url": link} for link in media_links]
+
+    print("📬 Sending issue to Airtable...")
+    print("🛠 Airtable payload:", json.dumps(fields, indent=2))
+
+    try:
+        response = requests.post(url, headers=headers, json={"fields": fields})
+        print("Airtable log status:", response.status_code, response.text)
+    except Exception as e:
+        print("❌ Airtable logging failed:", str(e))
+
 @app.route("/vonage/whatsapp", methods=["POST"])
 def vonage_whatsapp():
     data = request.get_json()
@@ -68,19 +98,15 @@ def vonage_whatsapp():
 
         print("Message from WhatsApp user:", msg)
 
-        # Classify issue
         triage = classify_issue(msg)
         should_escalate = should_bypass_landlord(triage)
 
-        # Escalation-based language
         escalation_instruction = (
-            "This issue is urgent and requires escalation to a human. "
-            "Let the tenant know it’s being escalated. Be clear and calm."
+            "This issue is urgent and requires escalation to a human. Let the tenant know it’s being escalated. Be clear and calm."
             if should_escalate else
             "This issue is not considered urgent. Ask follow-up questions to better understand the situation."
         )
-        
-        # GPT prompt
+
         triage_prompt = (
             f"You are Allai, a professional assistant trained in property maintenance triage.\n"
             f"The issue appears to relate to: {triage['category']}.\n"
@@ -97,7 +123,6 @@ def vonage_whatsapp():
             ]
         ).choices[0].message.content
 
-        # Send AI reply back to WhatsApp
         payload = {
             "from": {
                 "type": "whatsapp",
@@ -122,6 +147,9 @@ def vonage_whatsapp():
         )
 
         print("Vonage send status:", response.status_code, response.text)
+
+        log_issue_to_airtable(user_number, msg, triage["category"], triage["urgency"], should_escalate, triage["followup_questions"])
+
         return "ok"
 
     except Exception as e:
