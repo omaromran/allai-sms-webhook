@@ -157,9 +157,20 @@ def vonage_whatsapp():
 
         #Messenger
         payload = {
-        "from": { "type": "messenger", "id": "YOUR_PAGE_ID" },
-        "to": { "type": "messenger", "id": "PSID_FROM_WEBHOOK" },
-        "message": { "content": { "type": "text", "text": "Hi! I'm Allai. How can I help?" } }
+            "from": {
+                "type": "messenger",
+                "id": "699775536544257"  # ✅ Your Facebook Page ID
+            },
+            "to": {
+                "type": "messenger",
+                "id": sender_id  # PSID from the incoming message
+            },
+            "message": {
+                "content": {
+                "type": "text",
+                "text": reply  # The GPT or fallback response
+                }
+            }
         }
 
 
