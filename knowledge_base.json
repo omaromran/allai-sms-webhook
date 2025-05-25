@@ -1,29 +1,56 @@
 {
   "plumbing": {
-    "keywords": ["leak", "pipe", "water", "drip", "toilet", "sink"],
-    "questions": [
-      "Is the leak steady or gushing?",
+    "keywords": ["leak", "pipe", "water", "drip", "flood", "sink", "toilet", "burst"],
+    "emergency_triggers": ["flood", "gushing", "water everywhere", "burst pipe"],
+    "followup_questions": [
+      "Is the leak gushing or a slow drip?",
       "Can you see where the water is coming from?",
-      "Has the water been shut off?"
-    ],
-    "emergency_phrases": ["flood", "gushing", "water everywhere"]
+      "Is it spreading to other rooms or causing damage?"
+    ]
   },
   "electrical": {
-    "keywords": ["outlet", "breaker", "power", "light", "spark"],
-    "questions": [
-      "Is it affecting just one room or the whole house?",
-      "Are there any sparks or burning smells?",
+    "keywords": ["outlet", "power", "light", "breaker", "electrical", "shock", "buzz", "spark"],
+    "emergency_triggers": ["sparks", "burning smell", "electrical fire", "shock"],
+    "followup_questions": [
+      "Is it affecting one room or the entire unit?",
+      "Are you seeing any sparks or hearing any buzzing?",
       "Have you checked the breaker box?"
-    ],
-    "emergency_phrases": ["spark", "sparks", "burning smell"]
+    ]
   },
   "hvac": {
-    "keywords": ["ac", "air conditioner", "heat", "thermostat", "furnace"],
-    "questions": [
-      "Is the air completely off or just not warm/cool enough?",
-      "Is it currently cold or hot in the house?",
-      "Is the thermostat showing any error?"
-    ],
-    "emergency_phrases": ["no heat", "freezing", "no air"]
+    "keywords": ["heat", "air", "ac", "cold", "hot", "thermostat", "furnace"],
+    "emergency_triggers": ["no heat", "freezing", "no air", "extreme heat"],
+    "followup_questions": [
+      "Is the unit running at all?",
+      "Is the temperature inside very uncomfortable?",
+      "Is the thermostat showing an error?"
+    ]
+  },
+  "appliance": {
+    "keywords": ["fridge", "dishwasher", "microwave", "washer", "dryer", "oven"],
+    "emergency_triggers": ["leaking appliance", "overheating appliance", "fire risk"],
+    "followup_questions": [
+      "Which appliance is the issue with?",
+      "Is it completely non-functional or acting strangely?",
+      "Is it making unusual sounds or smells?"
+    ]
+  },
+  "pest": {
+    "keywords": ["bugs", "insects", "mice", "rats", "roaches", "pest", "infestation"],
+    "emergency_triggers": ["severe infestation", "health risk", "bites"],
+    "followup_questions": [
+      "What kind of pests are you seeing?",
+      "How many are you seeing and in which rooms?",
+      "Have you noticed damage or droppings?"
+    ]
+  },
+  "other": {
+    "keywords": ["broken", "damaged", "cracked", "noise", "issue", "problem"],
+    "emergency_triggers": [],
+    "followup_questions": [
+      "Can you describe the issue in more detail?",
+      "Is it affecting your ability to live in the unit?",
+      "Have you noticed it getting worse recently?"
+    ]
   }
 }
