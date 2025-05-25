@@ -135,22 +135,33 @@ def vonage_whatsapp():
             reply = gpt_reply
             log_issue_to_airtable(record_id, msg)
 
+        
+        # Whatsapp
+        # payload = {
+        #     "from": {
+        #         "type": "whatsapp",
+        #         "number": "15557817931"
+        #     },
+        #     "to": {
+        #         "type": "whatsapp",
+        #         "number": user_number
+        #     },
+        #     "message": {
+        #         "content": {
+        #             "type": "text",
+        #             "text": reply
+        #         }
+        #     }
+        # }
+
+
+        #Messenger
         payload = {
-            "from": {
-                "type": "whatsapp",
-                "number": "15557817931"
-            },
-            "to": {
-                "type": "whatsapp",
-                "number": user_number
-            },
-            "message": {
-                "content": {
-                    "type": "text",
-                    "text": reply
-                }
-            }
+        "from": { "type": "messenger", "id": "YOUR_PAGE_ID" },
+        "to": { "type": "messenger", "id": "PSID_FROM_WEBHOOK" },
+        "message": { "content": { "type": "text", "text": "Hi! I'm Allai. How can I help?" } }
         }
+
 
         response = requests.post(
             "https://api.nexmo.com/v0.1/messages",
