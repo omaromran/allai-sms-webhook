@@ -1,0 +1,29 @@
+{
+  "plumbing": {
+    "keywords": ["leak", "pipe", "water", "drip", "toilet", "sink"],
+    "questions": [
+      "Is the leak steady or gushing?",
+      "Can you see where the water is coming from?",
+      "Has the water been shut off?"
+    ],
+    "emergency_phrases": ["flood", "gushing", "water everywhere"]
+  },
+  "electrical": {
+    "keywords": ["outlet", "breaker", "power", "light", "spark"],
+    "questions": [
+      "Is it affecting just one room or the whole house?",
+      "Are there any sparks or burning smells?",
+      "Have you checked the breaker box?"
+    ],
+    "emergency_phrases": ["spark", "sparks", "burning smell"]
+  },
+  "hvac": {
+    "keywords": ["ac", "air conditioner", "heat", "thermostat", "furnace"],
+    "questions": [
+      "Is the air completely off or just not warm/cool enough?",
+      "Is it currently cold or hot in the house?",
+      "Is the thermostat showing any error?"
+    ],
+    "emergency_phrases": ["no heat", "freezing", "no air"]
+  }
+}
