@@ -170,6 +170,13 @@ def vonage_whatsapp():
         print("Error:", e)
         return "error", 500
 
+@app.route("/messenger", methods=["POST"])
+def handle_messenger():
+    data = request.get_json()
+    print("📥 Incoming Messenger message:", json.dumps(data, indent=2))
+
+    # Optional: respond with a quick debug message
+    return "ok", 200
 
 @app.route("/media-upload", methods=["POST"])
 def media_upload():
