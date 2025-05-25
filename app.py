@@ -28,7 +28,7 @@ def vonage_whatsapp():
         gpt_reply = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": ""You are Allai, a helpful, friendly AI assistant for home maintenance. "
+                {"role": "system", "content": "You are Allai, a helpful, friendly AI assistant for home maintenance. "
                 "When a tenant sends a message, always start by introducing yourself. "
                 "Then calmly ask if this is an emergency (like flooding, sparks, or no heat in winter). "
                 "If it sounds urgent, let them know you're escalating it. "
