@@ -8,7 +8,7 @@ openai.api_key = os.environ.get("sk-proj-NnCNKPub8UNgnfa0X_2-CL4N7CD6UCKNO0dzzfK
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Allai webhook is running ✅"
+    return "Allai webhook is running! ✅"
     
 @app.route("/sms", methods=["POST"])
 def sms_reply():
