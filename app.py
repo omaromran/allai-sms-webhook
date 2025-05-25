@@ -15,32 +15,57 @@ AIRTABLE_TOKEN = os.environ["AIRTABLE_TOKEN"]
 AIRTABLE_BASE_ID = os.environ["AIRTABLE_BASE_ID"]
 AIRTABLE_TABLE_NAME = "Issues"
 
-def log_issue_to_airtable(phone, message, category, urgency, escalated, followups, media_links=[]):
+def generate_issue_id():
+    from random import randint
+    return f"ISSUE-{randint(100000, 999999)}"
+
+def get_or_create_issue(phone, message, triage):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
+    
+    # Check for existing open issue
+    params = {
+        "filterByFormula": f"AND({{Phone}}='{phone}', OR({{Status}}='Open', {{Status}}='Escalated'))"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    records = response.json().get("records", [])
+
+    if records:
+        issue_id = records[0]["fields"].get("Issue ID", "Unknown")
+        record_id = records[0]["id"]
+        print(f"📌 Found existing issue ID: {issue_id}")
+        return issue_id, record_id
+
+    # Otherwise, create new issue
+    issue_id = generate_issue_id()
     fields = {
-        "Message Summary": message[:50],
+        "Issue ID": issue_id,
         "Phone": phone,
         "Message": message,
-        "Category": category,
-        "Urgency": urgency,
-        "Escalated": escalated,
-        "Follow-ups": "\n".join(followups)
+        "Category": triage["category"],
+        "Urgency": triage["urgency"],
+        "Escalated": triage["should_escalate"],
+        "Follow-ups": "\n".join(triage["followup_questions"]),
+        "Status": "Open"
     }
-    if media_links:
-        fields["Media"] = [{"url": link} for link in media_links]
+    create_response = requests.post(url, headers=headers, json={"fields": fields})
+    print("🆕 Created new issue with ID:", issue_id)
+    return issue_id, create_response.json().get("id")
 
-    print("📬 Sending issue to Airtable...")
-    print("🛠 Airtable payload:", json.dumps(fields, indent=2))
-
+def log_issue_to_airtable(record_id, updates):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}/{record_id}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
     try:
-        response = requests.post(url, headers=headers, json={"fields": fields})
-        print("Airtable log status:", response.status_code, response.text)
+        response = requests.patch(url, headers=headers, json={"fields": updates})
+        print("Airtable update status:", response.status_code, response.text)
     except Exception as e:
-        print("❌ Airtable logging failed:", str(e))
+        print("❌ Airtable update failed:", str(e))
 
 @app.route("/vonage/whatsapp", methods=["POST"])
 def vonage_whatsapp():
@@ -56,10 +81,12 @@ def vonage_whatsapp():
         triage = classify_issue(msg)
         should_escalate = should_bypass_landlord(triage)
 
+        issue_id, record_id = get_or_create_issue(user_number, msg, triage)
+
         escalation_instruction = (
-            "This issue is urgent and requires escalation to a human. Let the tenant know it’s being escalated. Be clear and calm."
+            f"This issue has been assigned to {issue_id}. It is urgent and requires escalation to a human. Please stay tuned while we coordinate." 
             if should_escalate else
-            "This issue is not considered urgent. Ask follow-up questions to better understand the situation."
+            f"This issue has been assigned to {issue_id}. It's not urgent, but I’ll ask a few more questions to better understand."
         )
 
         triage_prompt = (
@@ -103,7 +130,7 @@ def vonage_whatsapp():
 
         print("Vonage send status:", response.status_code, response.text)
 
-        log_issue_to_airtable(user_number, msg, triage["category"], triage["urgency"], should_escalate, triage["followup_questions"])
+        log_issue_to_airtable(record_id, {"Message": msg})
 
         return "ok"
 
