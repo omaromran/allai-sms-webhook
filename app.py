@@ -37,7 +37,7 @@ def vonage_whatsapp():
         # Triage via knowledge base
         category, questions, is_urgent = classify_issue(msg, KB)
         triage_prompt = (
-            f"You are Allai, a tenant assistant trained in property maintenance triage.\n"
+            f"You are Allai, a tenant assistant trained in property maintenance triage .\n"
             f"This issue appears to relate to: {category}.\n"
             f"It {'is' if is_urgent else 'is not'} urgent.\n"
             f"Ask the following questions to help clarify the issue:\n"
