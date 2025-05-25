@@ -3,6 +3,7 @@ from openai import OpenAI
 import os
 import requests
 import json
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -11,17 +12,50 @@ client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 VONAGE_API_KEY = os.environ["VONAGE_API_KEY"]
 VONAGE_API_SECRET = os.environ["VONAGE_API_SECRET"]
 
-# Load knowledge base once at startup
+# Load knowledge base
 with open("knowledge_base.json") as f:
     KB = json.load(f)
 
-def classify_issue(msg, kb):
-    msg_lower = msg.lower()
-    for category, info in kb.items():
-        if any(word in msg_lower for word in info["keywords"]):
-            emergency = any(phrase in msg_lower for phrase in info["emergency_phrases"])
-            return category, info["questions"], emergency
-    return "other", ["Can you tell me more about the issue?"], False
+ESCALATION_RULES = {
+    "after_hours_start": 21,
+    "after_hours_end": 7,
+    "weekend": [5, 6],
+    "require_media_to_confirm": False
+}
+
+def classify_issue(text):
+    text = text.lower()
+    for category, data in KB.items():
+        if any(keyword in text for keyword in data["keywords"]):
+            emergency = any(trigger in text for trigger in data["emergency_triggers"])
+            return {
+                "category": category,
+                "urgency": "high" if emergency else "normal",
+                "should_escalate": emergency,
+                "followup_questions": data["followup_questions"]
+            }
+    return {
+        "category": "other",
+        "urgency": "normal",
+        "should_escalate": False,
+        "followup_questions": KB["other"]["followup_questions"]
+    }
+
+def is_after_hours():
+    now = datetime.now()
+    return now.hour >= ESCALATION_RULES["after_hours_start"] or now.hour < ESCALATION_RULES["after_hours_end"]
+
+def is_weekend():
+    return datetime.now().weekday() in ESCALATION_RULES["weekend"]
+
+def should_bypass_landlord(escalation_info, media_present=False):
+    if escalation_info["should_escalate"]:
+        return True
+    if is_after_hours() or is_weekend():
+        return True
+    if ESCALATION_RULES["require_media_to_confirm"] and not media_present:
+        return False
+    return False
 
 @app.route("/vonage/whatsapp", methods=["POST"])
 def vonage_whatsapp():
@@ -34,17 +68,19 @@ def vonage_whatsapp():
 
         print("Message from WhatsApp user:", msg)
 
-        # Triage via knowledge base
-        category, questions, is_urgent = classify_issue(msg, KB)
+        # Classify issue
+        triage = classify_issue(msg)
+        should_escalate = should_bypass_landlord(triage)
+
+        # Build GPT prompt
         triage_prompt = (
             f"You are Allai, a tenant assistant trained in property maintenance triage.\n"
-            f"This issue appears to relate to: {category}.\n"
-            f"It {'is' if is_urgent else 'is not'} urgent.\n"
-            f"Ask the following questions to help clarify the issue:\n"
-            f"- " + "\n- ".join(questions)
+            f"The issue appears to relate to: {triage['category']}.\n"
+            f"It is {'urgent' if triage['urgency'] == 'high' else 'non-urgent'}.\n"
+            f"Ask the following questions to gather more information:\n"
+            f"- " + "\n- ".join(triage["followup_questions"])
         )
 
-        # GPT-4o response
         gpt_reply = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -53,7 +89,7 @@ def vonage_whatsapp():
             ]
         ).choices[0].message.content
 
-        # Send GPT reply to WhatsApp
+        # Send AI reply back to WhatsApp
         payload = {
             "from": {
                 "type": "whatsapp",
