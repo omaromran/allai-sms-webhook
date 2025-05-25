@@ -18,14 +18,16 @@ def sms_reply():
     print("Received message:", incoming_msg)
 
     try:
-        completion = openai.ChatCompletion.create(
+        client = openai.OpenAI(api_key=os.environ.get("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"))
+
+        response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are Allai, a helpful AI assistant for tenants..."},
+                {"role": "system", "content": "You are Allai..."},
                 {"role": "user", "content": incoming_msg}
             ]
         )
-        reply = completion.choices[0].message["content"]
+        reply = response.choices[0].message.content
         print("AI Response:", reply)
 
     except Exception as e:
