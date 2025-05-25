@@ -6,6 +6,10 @@ import os
 app = Flask(__name__)
 openai.api_key = os.environ.get("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")
 
+@app.route("/", methods=["GET"])
+def index():
+    return "Allai webhook is running ✅"
+    
 @app.route("/sms", methods=["POST"])
 def sms_reply():
     incoming_msg = request.form['Body']
