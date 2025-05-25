@@ -1,39 +1,43 @@
-from flask import Flask, request
-from twilio.twiml.messaging_response import MessagingResponse
-import openai
+from flask import request
+from openai import OpenAI
 import os
+import requests
 
-app = Flask(__name__)
-openai.api_key = os.environ.get("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")
+client = OpenAI(api_key=os.environ["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"])
 
-@app.route("/", methods=["GET"])
-def index():
-    return "Allai webhook is running! ✅"
-    
-@app.route("/sms", methods=["POST"])
-def sms_reply():
-    incoming_msg = request.form.get("Body", "")
-    phone = request.form.get("From", "")
+VONAGE_API_KEY = os.environ["e71e8143"]
+VONAGE_API_SECRET = os.environ["49513061"]
 
-    print("Received message:", incoming_msg)
+@app.route("/vonage/whatsapp", methods=["POST"])
+def vonage_whatsapp():
+    data = request.get_json()
+    print("Incoming WhatsApp:", data)
 
-    try:
-        client = openai.OpenAI(api_key=os.environ.get("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"))
+    # Extract message and sender
+    msg = data['message']['content']['text']
+    to = data['from']['number']
+    from_ = data['to']['number']
 
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are Allai..."},
-                {"role": "user", "content": incoming_msg}
-            ]
-        )
-        reply = response.choices[0].message.content
-        print("AI Response:", reply)
+    # Get AI reply
+    gpt_reply = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are Allai, a helpful assistant for tenant maintenance issues."},
+            {"role": "user", "content": msg}
+        ]
+    ).choices[0].message.content
 
-    except Exception as e:
-        print("❌ OpenAI API Error:", str(e))  # This will show you exactly what went wrong
-        reply = "Sorry, something went wrong while processing your request."
+    # Send back reply via Vonage Messages API
+    response = requests.post("https://api.nexmo.com/v0.1/messages", json={
+        "from": {"type": "whatsapp", "number": from_},
+        "to": {"type": "whatsapp", "number": to},
+        "message": {
+            "content": {
+                "type": "text",
+                "text": gpt_reply
+            }
+        }
+    }, auth=(VONAGE_API_KEY, VONAGE_API_SECRET))
 
-    resp = MessagingResponse()
-    resp.message(reply)
-    return str(resp)
+    print("Vonage send response:", response.status_code, response.text)
+    return "ok"
