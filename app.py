@@ -34,7 +34,7 @@ def vonage_whatsapp():
         ).choices[0].message.content
 
         # Send AI reply back to WhatsApp via Vonage API
-        response = requests.post("https://api.nexmo.com/v0.1/messages",
+        response = requests.post("https://messages-sandbox.nexmo.com/v0.1/messages",
             json={
                 "from": {
                     "type": "whatsapp",
