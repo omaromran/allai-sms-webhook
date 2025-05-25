@@ -15,6 +15,7 @@ VONAGE_API_SECRET = os.environ["VONAGE_API_SECRET"]
 AIRTABLE_TOKEN = os.environ["AIRTABLE_TOKEN"]
 AIRTABLE_BASE_ID = os.environ["AIRTABLE_BASE_ID"]
 AIRTABLE_TABLE_NAME = "Issues"
+VISUAL_CATEGORIES = {"plumbing", "pest", "appliance", "other"}
 
 def generate_issue_id():
     from random import randint
@@ -133,6 +134,11 @@ def vonage_whatsapp():
             ).choices[0].message.content
 
             reply = gpt_reply
+
+            # Append media upload link for visual categories
+            if triage["category"] in VISUAL_CATEGORIES:
+                reply += "\n\n📸 If possible, please upload a photo or video of the issue here:\nhttps://allai-upload.web.app"
+                
             log_issue_to_airtable(record_id, msg)
 
         
