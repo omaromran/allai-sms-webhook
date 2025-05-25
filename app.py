@@ -169,3 +169,47 @@ def vonage_whatsapp():
     except Exception as e:
         print("Error:", e)
         return "error", 500
+
+
+@app.route("/media-upload", methods=["POST"])
+def media_upload():
+    data = request.get_json()
+    issue_id = data.get("issue_id")
+    media_urls = data.get("media_urls", [])
+
+    if not issue_id or not media_urls:
+        return {"error": "Missing issue_id or media_urls"}, 400
+
+    search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "filterByFormula": f"{{Issue ID}}='{issue_id}'"
+    }
+    response = requests.get(search_url, headers=headers, params=params)
+    records = response.json().get("records", [])
+
+    if not records:
+        return {"error": "Issue ID not found"}, 404
+
+    record_id = records[0]["id"]
+    patch_url = f"{search_url}/{record_id}"
+    attachments = [{"url": url} for url in media_urls]
+    payload = {
+        "fields": {
+            "Media": attachments
+        }
+    }
+
+    update_resp = requests.patch(patch_url, headers=headers, json=payload)
+    print("Media upload Airtable status:", update_resp.status_code, update_resp.text)
+
+    return {"status": "success"}, 200
+
+@app.route("/status", methods=["POST"])
+def message_status():
+    data = request.get_json()
+    print("📦 Message status update:", json.dumps(data, indent=2))
+    return "ok"
