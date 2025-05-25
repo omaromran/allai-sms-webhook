@@ -2,15 +2,14 @@ import json
 from datetime import datetime
 import re
 
-# Load the knowledge base JSON
+# Load the knowledge base
 with open("knowledge_base.json") as f:
     KB = json.load(f)
 
-# Configurable rules
 ESCALATION_RULES = {
-    "after_hours_start": 21,   # 9 PM
-    "after_hours_end": 7,      # 7 AM
-    "weekend": [5, 6],         # Saturday, Sunday
+    "after_hours_start": 21,
+    "after_hours_end": 7,
+    "weekend": [5, 6],
     "require_media_to_confirm": False
 }
 
@@ -19,21 +18,25 @@ def normalize(text):
 
 def classify_issue(text):
     text = normalize(text)
+    escalation_triggers = ["escalate", "talk to someone", "talk to a human", "connect me", "urgent", "emergency", "major issue"]
+    should_escalate = any(phrase in text for phrase in escalation_triggers)
+
     for category, data in KB.items():
         if any(keyword in text for keyword in data["keywords"]):
-            emergency = any(trigger in text for trigger in data["emergency_triggers"])
+            emergency = should_escalate or any(trigger in text for trigger in data["emergency_triggers"])
             if emergency:
-                print("⚠️ Emergency trigger detected. Escalating to L1.")
+                print("⚠️ Emergency or override escalation detected. Escalating to L1.")
             return {
                 "category": category,
                 "urgency": "high" if emergency else "normal",
                 "should_escalate": emergency,
                 "followup_questions": data["followup_questions"]
             }
+
     return {
         "category": "other",
-        "urgency": "normal",
-        "should_escalate": False,
+        "urgency": "high" if should_escalate else "normal",
+        "should_escalate": should_escalate,
         "followup_questions": KB["other"]["followup_questions"]
     }
 
@@ -44,9 +47,9 @@ def is_after_hours():
 def is_weekend():
     return datetime.now().weekday() in ESCALATION_RULES["weekend"]
 
-def should_bypass_landlord(triage_result, media_present=False):
-    if triage_result["should_escalate"]:
-        print("⚠️ Escalation due to emergency condition.")
+def should_bypass_landlord(escalation_info, media_present=False):
+    if escalation_info["should_escalate"]:
+        print("⚠️ Escalation due to emergency or override condition.")
         return True
     if is_after_hours() or is_weekend():
         print("⏰ Escalation due to time condition (after-hours or weekend).")
