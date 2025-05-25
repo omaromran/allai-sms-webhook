@@ -23,9 +23,61 @@ VISUAL_CATEGORIES = {"plumbing", "pest", "appliance", "other"}
 
 GMAIL_USER = os.environ["GMAIL_USER"]
 GMAIL_PASS = os.environ["GMAIL_APP_PASS"]
-L1_EMAIL = os.environ.get("L1_EMAIL", "landlord@example.com")
+L1_EMAIL = os.environ.get("L1_EMAIL", "omranomar1@gmail.com")
 
-# ... (unchanged utility functions above) ...
+
+def generate_issue_id():
+    from random import randint
+    return f"ISSUE-{randint(100000, 999999)}"
+
+def is_new_issue(message):
+    message = message.lower()
+    return any(phrase in message for phrase in ["new issue", "another issue", "different problem", "new problem"])
+
+def is_resolved(message):
+    message = message.lower()
+    return any(phrase in message for phrase in ["fixed", "resolved", "no longer", "no issue", "solved", "it’s all good"])
+
+def get_unit_for_phone(phone):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/Tenants"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "filterByFormula": f"{{Phone}}='{phone}'"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    records = response.json().get("records", [])
+
+    if records:
+        return records[0]["fields"].get("Unit", "Unknown")
+    else:
+        return "Unknown"
+
+def notify_l1_via_gmail(issue_id, summary, category, urgency, record_id, unit):
+    airtable_link = f"https://airtable.com/{AIRTABLE_BASE_ID}/{record_id}"
+    body = f"""
+    🚨 Escalated Maintenance Issue: {issue_id}
+
+    Unit: {unit}
+    Summary: {summary}
+    Category: {category}
+    Urgency: {urgency}
+
+    View in Airtable: {airtable_link}
+    """
+
+    msg = MIMEText(body)
+    msg["Subject"] = f"🚨 Escalated Issue: {issue_id}"
+    msg["From"] = GMAIL_USER
+    msg["To"] = L1_EMAIL
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_PASS)
+        server.send_message(msg)
+
+    print("📧 L1 email alert sent via Gmail")
 
 def get_or_create_issue(phone, message, triage):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
@@ -60,6 +112,27 @@ def get_or_create_issue(phone, message, triage):
     create_response = requests.post(url, headers=headers, json={"fields": fields})
     print("🆕 Created new issue with ID:", issue_id)
     return issue_id, create_response.json().get("id"), True
+
+def log_issue_to_airtable(record_id, new_message, mark_resolved=False):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}/{record_id}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    get_resp = requests.get(url, headers=headers)
+    current_message = get_resp.json().get("fields", {}).get("Message", "")
+    full_message = (current_message + "\n" + new_message).strip()
+
+    updates = { "Message": full_message }
+    if mark_resolved:
+        updates["Status"] = "Resolved"
+
+    try:
+        response = requests.patch(url, headers=headers, json={"fields": updates})
+        print("Airtable update status:", response.status_code, response.text)
+    except Exception as e:
+        print("❌ Airtable update failed:", str(e))
 
 @app.route("/messages", methods=["POST"])
 def vonage_whatsapp():
