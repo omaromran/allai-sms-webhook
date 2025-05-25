@@ -37,7 +37,7 @@ def vonage_whatsapp():
         response = requests.post("https://api.nexmo.com/v0.1/messages", json={
             "from": {
                 "type": "whatsapp",
-                "number": "14157386102"  # Your Vonage sandbox number
+                "number": "+14157386102"  # Your Vonage sandbox number
             },
             "to": {
                 "type": "whatsapp",
