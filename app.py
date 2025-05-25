@@ -3,6 +3,8 @@ from openai import OpenAI
 import os
 import requests
 
+app = Flask(__name__)
+
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 VONAGE_API_KEY = os.environ["VONAGE_API_KEY"]
