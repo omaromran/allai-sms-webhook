@@ -1,7 +1,9 @@
-from flask import request
+from flask import Flask, request
+from twilio.twiml.messaging_response import MessagingResponse
 from openai import OpenAI
 import os
 import requests
+
 
 app = Flask(__name__)
 
