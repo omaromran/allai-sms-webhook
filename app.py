@@ -1,4 +1,5 @@
 from flask import Flask, request
+from flask_cors import CORS
 from openai import OpenAI
 import os
 import requests
@@ -7,6 +8,7 @@ from triage_engine import classify_issue, should_bypass_landlord
 from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
@@ -174,8 +176,12 @@ def vonage_whatsapp():
 
 
 
-@app.route("/media-upload", methods=["POST"])
+@app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
+    # Handle CORS preflight
+    if request.method == "OPTIONS":
+        return '', 200
+
     data = request.get_json()
     issue_id = data.get("issue_id")
     media_urls = data.get("media_urls", [])
@@ -183,6 +189,7 @@ def media_upload():
     if not issue_id or not media_urls:
         return {"error": "Missing issue_id or media_urls"}, 400
 
+    # Airtable update
     search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -191,6 +198,7 @@ def media_upload():
     params = {
         "filterByFormula": f"{{Issue ID}}='{issue_id}'"
     }
+
     response = requests.get(search_url, headers=headers, params=params)
     records = response.json().get("records", [])
 
