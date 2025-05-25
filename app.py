@@ -175,8 +175,47 @@ def handle_messenger():
     data = request.get_json()
     print("📥 Incoming Messenger message:", json.dumps(data, indent=2))
 
-    # Optional: respond with a quick debug message
-    return "ok", 200
+    try:
+        msg = data.get("text")
+        user_id = data.get("from")
+        channel = data.get("channel")
+
+        # Basic GPT reply (you can add triage logic later)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are Allai, an AI assistant helping tenants with maintenance."},
+                {"role": "user", "content": msg}
+            ]
+        )
+        reply = response.choices[0].message.content
+
+        # Build outbound payload
+        payload = {
+            "from": {
+                "type": "messenger",
+                "id": "699775536544257"  # Your Page ID
+            },
+            "to": {
+                "type": "messenger",
+                "id": user_id
+            },
+            "message": {
+                "content": {
+                    "type": "text",
+                    "text": reply
+                }
+            }
+        }
+
+        r = requests.post("https://api.nexmo.com/v0.1/messages", json=payload, auth=(VONAGE_API_KEY, VONAGE_API_SECRET))
+        print("Messenger send status:", r.status_code, r.text)
+
+        return "ok", 200
+
+    except Exception as e:
+        print("❌ Messenger handler error:", str(e))
+        return "error", 500
 
 @app.route("/media-upload", methods=["POST"])
 def media_upload():
