@@ -21,6 +21,10 @@ AIRTABLE_BASE_ID = os.environ["AIRTABLE_BASE_ID"]
 AIRTABLE_TABLE_NAME = "Issues"
 VISUAL_CATEGORIES = {"plumbing", "pest", "appliance", "other"}
 
+GMAIL_USER = os.environ["GMAIL_USER"]
+GMAIL_PASS = os.environ["GMAIL_APP_PASS"]
+L1_EMAIL = os.environ.get("L1_EMAIL", "landlord@example.com")
+
 def generate_issue_id():
     from random import randint
     return f"ISSUE-{randint(100000, 999999)}"
@@ -33,14 +37,53 @@ def is_resolved(message):
     message = message.lower()
     return any(phrase in message for phrase in ["fixed", "resolved", "no longer", "no issue", "solved", "it’s all good"])
 
+def get_unit_for_phone(phone):
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/Tenants"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "filterByFormula": f"{{Phone}}='{phone}'"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    records = response.json().get("records", [])
+
+    if records:
+        return records[0]["fields"].get("Unit", "Unknown")
+    else:
+        return "Unknown"
+
+def notify_l1_via_gmail(issue_id, summary, category, urgency, record_id, unit):
+    airtable_link = f"https://airtable.com/{AIRTABLE_BASE_ID}/{record_id}"
+    body = f"""
+    🚨 Escalated Maintenance Issue: {issue_id}
+
+    Unit: {unit}
+    Summary: {summary}
+    Category: {category}
+    Urgency: {urgency}
+
+    View in Airtable: {airtable_link}
+    """
+
+    msg = MIMEText(body)
+    msg["Subject"] = f"🚨 Escalated Issue: {issue_id}"
+    msg["From"] = GMAIL_USER
+    msg["To"] = L1_EMAIL
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_PASS)
+        server.send_message(msg)
+
+    print("📧 L1 email alert sent via Gmail")
+
 def get_or_create_issue(phone, message, triage):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
-    
-    # Check for existing open issue
     params = {
         "filterByFormula": f"AND({{Phone}}='{phone}', OR({{Status}}='Open', {{Status}}='Escalated'))"
     }
@@ -53,7 +96,6 @@ def get_or_create_issue(phone, message, triage):
         print(f"📌 Found existing issue ID: {issue_id}")
         return issue_id, record_id, False
 
-    # Otherwise, create new issue
     issue_id = generate_issue_id()
     fields = {
         "Issue ID": issue_id,
@@ -76,15 +118,11 @@ def log_issue_to_airtable(record_id, new_message, mark_resolved=False):
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
-
-    # Get current message log
     get_resp = requests.get(url, headers=headers)
     current_message = get_resp.json().get("fields", {}).get("Message", "")
     full_message = (current_message + "\n" + new_message).strip()
 
-    updates = {
-        "Message": full_message
-    }
+    updates = {"Message": full_message}
     if mark_resolved:
         updates["Status"] = "Resolved"
 
@@ -102,23 +140,23 @@ def vonage_whatsapp():
     try:
         msg = data.get("text")
         user_number = data.get("from")
-
         print("Message from WhatsApp user:", msg)
 
         triage = classify_issue(msg)
         should_escalate = should_bypass_landlord(triage)
-        if should_escalate:
-             notify_l1_via_gmail(issue_id, msg[:50], triage["category"], triage["urgency"], record_id)
         resolved = is_resolved(msg)
-
         issue_id, record_id, is_new = get_or_create_issue(user_number, msg, triage)
+
+        if should_escalate:
+            unit = get_unit_for_phone(user_number)
+            notify_l1_via_gmail(issue_id, msg[:50], triage["category"], triage["urgency"], record_id, unit)
 
         if resolved:
             log_issue_to_airtable(record_id, msg, mark_resolved=True)
             reply = f"Thanks for letting me know! I’ve marked issue {issue_id} as resolved. Let me know if you need anything else."
         else:
             escalation_instruction = (
-                f"This issue has been assigned to {issue_id}. It is urgent and requires escalation to a human. Please stay tuned while we coordinate." 
+                f"This issue has been assigned to {issue_id}. It is urgent and requires escalation to a human. Please stay tuned while we coordinate."
                 if should_escalate else
                 f"This issue has been assigned to {issue_id}. It's not urgent, but I’ll ask a few more questions to better understand."
             )
@@ -140,16 +178,12 @@ def vonage_whatsapp():
             ).choices[0].message.content
 
             reply = gpt_reply
-
-            # Append media upload link for visual categories
             if triage["category"] in VISUAL_CATEGORIES:
                 reply += f"\n\n📸 If possible, upload a photo or video of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}"
 
             log_issue_to_airtable(record_id, msg)
 
-        
         channel = data.get("channel")
-
         if channel == "messenger":
             payload = {
                 "from": {"type": "messenger", "id": "699775536544257"},
@@ -163,26 +197,20 @@ def vonage_whatsapp():
                 "message": {"content": {"type": "text", "text": reply}}
             }
 
-
         response = requests.post(
             "https://api.nexmo.com/v0.1/messages",
             json=payload,
             auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
         )
-
         print("Vonage send status:", response.status_code, response.text)
-
         return "ok"
 
     except Exception as e:
         print("Error:", e)
         return "error", 500
 
-
-
 @app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
-    # Handle CORS preflight
     if request.method == "OPTIONS":
         return '', 200
 
@@ -193,7 +221,6 @@ def media_upload():
     if not issue_id or not media_urls:
         return {"error": "Missing issue_id or media_urls"}, 400
 
-    # Airtable update
     search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -202,7 +229,6 @@ def media_upload():
     params = {
         "filterByFormula": f"{{Issue ID}}='{issue_id}'"
     }
-
     response = requests.get(search_url, headers=headers, params=params)
     records = response.json().get("records", [])
 
@@ -220,7 +246,6 @@ def media_upload():
 
     update_resp = requests.patch(patch_url, headers=headers, json=payload)
     print("Media upload Airtable status:", update_resp.status_code, update_resp.text)
-
     return {"status": "success"}, 200
 
 @app.route("/status", methods=["POST"])
@@ -228,31 +253,3 @@ def message_status():
     data = request.get_json()
     print("📦 Message status update:", json.dumps(data, indent=2))
     return "ok"
-
-
-def notify_l1_via_gmail(issue_id, summary, category, urgency, record_id):
-    gmail_user = os.environ["GMAIL_USER"]
-    gmail_pass = os.environ["GMAIL_APP_PASS"]
-    to_email = os.environ.get("L1_EMAIL", "landlord@example.com")  # Optional: store this in Render too
-
-    airtable_link = f"https://airtable.com/{AIRTABLE_BASE_ID}/{record_id}"
-    body = f"""
-    🚨 Escalated Maintenance Issue: {issue_id}
-
-    Summary: {summary}
-    Category: {category}
-    Urgency: {urgency}
-
-    View in Airtable: {airtable_link}
-    """
-
-    msg = MIMEText(body)
-    msg["Subject"] = f"🚨 Escalated Issue: {issue_id}"
-    msg["From"] = gmail_user
-    msg["To"] = to_email
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(gmail_user, gmail_pass)
-        server.send_message(msg)
-
-    print("📧 L1 email alert sent via Gmail")
