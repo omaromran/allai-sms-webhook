@@ -3,10 +3,10 @@ from openai import OpenAI
 import os
 import requests
 
-client = OpenAI(api_key=os.environ["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"])
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-VONAGE_API_KEY = os.environ["e71e8143"]
-VONAGE_API_SECRET = os.environ["49513061"]
+VONAGE_API_KEY = os.environ["VONAGE_API_KEY"]
+VONAGE_API_SECRET = os.environ["VONAGE_API_SECRET"]
 
 @app.route("/vonage/whatsapp", methods=["POST"])
 def vonage_whatsapp():
