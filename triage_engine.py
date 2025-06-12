@@ -1,6 +1,16 @@
 # ✅ FILE: ingestion_script.py
-import os
 import json
+import os
+
+ESCALATION_RULES = {}
+
+try:
+    with open("triage_data/escalation_rules.json") as f:
+        ESCALATION_RULES = json.load(f)
+except Exception as e:
+    print("⚠️ Failed to load escalation_rules.json:", e)
+
+
 import io
 import re
 from dotenv import load_dotenv
