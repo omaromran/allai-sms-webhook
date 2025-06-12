@@ -3,3 +3,4 @@ openai
 twilio
 gunicorn
 flask-cors
+python-dotenv
