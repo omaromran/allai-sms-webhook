@@ -195,7 +195,11 @@ def vonage_whatsapp():
                 ]
             ).choices[0].message.content
 
-            reply = gpt_reply
+            reply = (
+                f"🚨 This issue has been escalated to our maintenance team and flagged as urgent.\n\n{gpt_reply}"
+                if should_escalate else gpt_reply
+            )
+                        
             if triage["category"] in VISUAL_CATEGORIES and not media_submitted:
                 reply += f"\n\n📸 If possible, upload a photo or video of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}"
 
