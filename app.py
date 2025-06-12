@@ -177,7 +177,7 @@ def vonage_whatsapp():
                 if should_escalate else
                 f"This issue has been assigned to {issue_id}. It's not urgent, but I’ll ask a few more questions to better understand."
 )
-            )
+            
 
             triage_prompt = (
                 f"You are Allai, a professional assistant trained in property maintenance triage.\n"
