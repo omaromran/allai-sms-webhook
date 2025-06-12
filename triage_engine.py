@@ -121,3 +121,20 @@ if __name__ == "__main__":
             download_and_parse_triage_file(service, folder['id'], name)
 
     print("✅ Ingestion complete.")
+
+
+    # triage_engine.py
+
+def classify_issue(message):
+    # Your implementation
+    return {
+        "category": "hvac",
+        "cluster": "example",
+        "urgency": "normal",
+        "followup_questions": ["example?"],
+        "should_escalate": False
+    }
+
+def should_bypass_landlord(triage_info, media_present=False):
+    # Your implementation
+    return False
