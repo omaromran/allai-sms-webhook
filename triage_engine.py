@@ -136,8 +136,11 @@ def classify_issue(message):
     }
 
 def should_bypass_landlord(triage_info, media_present=False):
-    message = triage_info["message"].lower()
+    message = triage_info.get("message", "").lower()
     urgency = triage_info.get("urgency", "normal")
+
+    if not message:
+        print("⚠️ Warning: 'message' key missing from triage_info.")
 
     print("\n🔍 Escalation Debug Info:")
     print(f"Message: {message}")
