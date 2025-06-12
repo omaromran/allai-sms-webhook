@@ -136,6 +136,7 @@ def classify_issue(message):
     }
 
 def should_bypass_landlord(triage_info, media_present=False):
+    global ESCALATION_RULES
     message = triage_info.get("message", "").lower()
     urgency = triage_info.get("urgency", "normal")
 
