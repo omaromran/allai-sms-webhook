@@ -173,9 +173,10 @@ def vonage_whatsapp():
             reply = f"Thanks for letting me know! I’ve marked issue {issue_id} as resolved. Let me know if you need anything else."
         else:
             escalation_instruction = (
-                f"This issue has been assigned to {issue_id}. It is urgent and requires escalation to a human. Please stay tuned while we coordinate."
+                f"This issue has been assigned to {issue_id}. It is urgent and has been escalated to our maintenance team. Please stay tuned while we coordinate."
                 if should_escalate else
                 f"This issue has been assigned to {issue_id}. It's not urgent, but I’ll ask a few more questions to better understand."
+)
             )
 
             triage_prompt = (
