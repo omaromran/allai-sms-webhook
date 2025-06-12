@@ -1,0 +1,72 @@
+{
+  "clusters": [
+    {
+      "name": "No Heat or System Failure",
+      "examples": [
+        "The heat isn\u2019t working at all.",
+        "The air feels cold."
+      ],
+      "triage_questions": [
+        "Is the unit blowing cold air, or not blowing air at all?",
+        "Has this happened before or is this the first time?",
+        "Is it currently very cold inside the home?",
+        "Can you estimate the indoor temperature?",
+        "Do you or anyone else in the home have health conditions that could be affected by the cold?"
+      ],
+      "escalation_rules": {
+        "emergency": [
+          "Emergency: No heat AND freezing indoor temperatures",
+          "Emergency: Burning smell, smoke, or carbon monoxide suspicion",
+          "Emergency: Tenant or household member has a health condition affected by cold"
+        ],
+        "same_day": [
+          "Same-Day: No heat but tolerable temperature",
+          "Same-Day: Intermittent heating",
+          "Same-Day: Thermostat or zone-specific failures"
+        ],
+        "next_day": [
+          "Next-Day: Mild inconsistencies",
+          "Next-Day: Noise or minor airflow issues",
+          "Next-Day: Settings, filters, or minor diagnostics needed"
+        ]
+      }
+    },
+    {
+      "name": "Thermostat or Control Issues",
+      "examples": [
+        "It only works sometimes.",
+        "The furnace is making a weird noise."
+      ],
+      "triage_questions": [
+        "Are the thermostat batteries working?",
+        "Does the screen light up?",
+        "Has the thermostat been recently changed or bumped?"
+      ],
+      "escalation_rules": {
+        "same_day": [
+          "Same-Day: Thermostat or zone-specific failures"
+        ]
+      }
+    },
+    {
+      "name": "System-Adjacent Issues (Vents, Filters, Settings)",
+      "examples": [
+        "Are your vents open and unobstructed?",
+        "Do you know when the filter was last changed?"
+      ],
+      "triage_questions": [
+        "Are any of the vents closed or blocked by furniture in the affected room(s)?"
+      ],
+      "escalation_rules": {
+        "next_day": [
+          "Next-Day: Filter change or blocked vent issues"
+        ]
+      }
+    }
+  ],
+  "media_prompts": {
+    "photo": "\ud83d\udcf8 Photo: Could you send a quick photo of the thermostat or HVAC system?",
+    "video": "\ud83c\udfa5 Video: Can you record the sound it\u2019s making?",
+    "audio": "\ud83c\udfa4 Audio: Would you be able to show us what the unit display looks like?"
+  }
+}

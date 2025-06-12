@@ -1,60 +1,123 @@
+# ✅ FILE: ingestion_script.py
+import os
 import json
-from datetime import datetime
+import io
 import re
+from dotenv import load_dotenv
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
-# Load the knowledge base
-with open("knowledge_base.json") as f:
-    KB = json.load(f)
+load_dotenv()
 
-ESCALATION_RULES = {
-    "after_hours_start": 21,
-    "after_hours_end": 7,
-    "weekend": [5, 6],
-    "require_media_to_confirm": False
-}
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+TRIAGE_FOLDER_ID = os.getenv("TRIAGE_ROOT_FOLDER_ID")
+OUTPUT_DIR = "triage_data"
+TARGET_CATEGORIES = ["hvac", "electrical"]
 
-def normalize(text):
-    return re.sub(r"[^a-z0-9 ]", "", text.lower())
+# -------------------- GOOGLE SETUP --------------------
+def get_drive_service():
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    return build('drive', 'v3', credentials=creds)
 
-def classify_issue(text):
-    text = normalize(text)
-    escalation_triggers = ["escalate", "talk to someone", "talk to a human", "connect me", "urgent", "emergency", "major issue"]
-    should_escalate = any(phrase in text for phrase in escalation_triggers)
+# -------------------- FOLDER LISTING --------------------
+def list_category_folders(service):
+    query = f"'{TRIAGE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder'"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    folders = results.get('files', [])
+    print("📁 Found subfolders:", [f"{f['name']} ({f['id']})" for f in folders])
+    return folders
 
-    for category, data in KB.items():
-        if any(keyword in text for keyword in data["keywords"]):
-            emergency = should_escalate or any(trigger in text for trigger in data["emergency_triggers"])
-            if emergency:
-                print("⚠️ Emergency or override escalation detected. Escalating to L1.")
-            return {
-                "category": category,
-                "urgency": "high" if emergency else "normal",
-                "should_escalate": emergency,
-                "followup_questions": data["followup_questions"]
-            }
+# -------------------- FILE UTILITIES --------------------
+def export_google_doc_as_text(service, file_id):
+    request = service.files().export_media(fileId=file_id, mimeType='text/plain')
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    fh.seek(0)
+    return fh.read().decode('utf-8')
 
-    return {
-        "category": "other",
-        "urgency": "high" if should_escalate else "normal",
-        "should_escalate": should_escalate,
-        "followup_questions": KB["other"]["followup_questions"]
-    }
+# -------------------- TRIAGE PARSING --------------------
+def parse_triage_text(text):
+    result = {"clusters": [], "media_prompts": {}}
+    current = {}
+    section = None
 
-def is_after_hours():
-    now = datetime.now()
-    return now.hour >= ESCALATION_RULES["after_hours_start"] or now.hour < ESCALATION_RULES["after_hours_end"]
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        lower = line.lower()
 
-def is_weekend():
-    return datetime.now().weekday() in ESCALATION_RULES["weekend"]
+        if lower.startswith("category"):
+            result["category"] = line.split(":")[-1].strip().lower()
 
-def should_bypass_landlord(escalation_info, media_present=False):
-    if escalation_info["should_escalate"]:
-        print("⚠️ Escalation due to emergency or override condition.")
-        return True
-    if is_after_hours() or is_weekend():
-        print("⏰ Escalation due to time condition (after-hours or weekend).")
-        return True
-    if ESCALATION_RULES["require_media_to_confirm"] and not media_present:
-        print("📸 Escalation requires media confirmation but none provided.")
-        return False
-    return False
+        elif lower.startswith("cluster"):
+            if current:
+                result["clusters"].append(current)
+            current = {"name": line.split(":")[-1].strip(), "examples": [], "triage_questions": [], "escalation_rules": {}}
+
+        elif lower.startswith("examples"):
+            section = "examples"
+        elif lower.startswith("triage notes"):
+            section = "triage_questions"
+        elif lower.startswith("escalation"):
+            section = "escalation"
+        elif lower.startswith("media prompts"):
+            section = "media"
+        elif section == "examples":
+            current["examples"].append(line.strip("- "))
+        elif section == "triage_questions":
+            current["triage_questions"].append(line.strip("- "))
+        elif section == "escalation":
+            rule_type = "next_day"
+            if "emergency" in line.lower():
+                rule_type = "emergency"
+            elif "same-day" in line.lower() or "same day" in line.lower():
+                rule_type = "same_day"
+            current["escalation_rules"].setdefault(rule_type, []).append(line.strip("- "))
+        elif section == "media":
+            if "photo" in line.lower():
+                result["media_prompts"]["photo"] = line
+            elif "video" in line.lower():
+                result["media_prompts"]["video"] = line
+            elif "audio" in line.lower():
+                result["media_prompts"]["audio"] = line
+
+    if current:
+        result["clusters"].append(current)
+    return result
+
+# -------------------- DOWNLOAD & SAVE TRIAGE --------------------
+def download_and_parse_triage_file(service, folder_id, category):
+    query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.document' and name contains 'Triage'"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    files = results.get('files', [])
+    if not files:
+        print(f"⚠️ No Triage Flow file found for {category}")
+        return
+
+    print(f"📄 Found triage file: {files[0]['name']}")
+    text = export_google_doc_as_text(service, files[0]['id'])
+    parsed = parse_triage_text(text)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(f"{OUTPUT_DIR}/{category}.json", "w") as f:
+        json.dump(parsed, f, indent=2)
+    print(f"✅ Saved {category}.json")
+
+# -------------------- MAIN --------------------
+if __name__ == "__main__":
+    print("🔍 Loaded folder ID:", TRIAGE_FOLDER_ID)
+    service = get_drive_service()
+    folders = list_category_folders(service)
+
+    for folder in folders:
+        name = folder['name'].lower()
+        if name in TARGET_CATEGORIES:
+            download_and_parse_triage_file(service, folder['id'], name)
+
+    print("✅ Ingestion complete.")

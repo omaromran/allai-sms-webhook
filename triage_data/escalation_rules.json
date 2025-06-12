@@ -1,0 +1,48 @@
+{
+  "emergency_keywords": [
+    "* Fire Hazards: fire, smoke, flames, sparks, burning smell",
+    "* Flood & Water Damage: burst pipe, ceiling leaking, flood, overflow",
+    "* Toxic Exposure: mold, mildew, gas, carbon monoxide, chemical",
+    "* Electric Risk: power surge, outlet sparking, electrical shock",
+    "* Structural Risk: wall collapsing, roof falling, ceiling crack"
+  ],
+  "urgency_phrases": [],
+  "time_based_rules": [],
+  "sentiment_triggers": [
+    "* Phrases like \"You\u2019re not helping me,\" \"I\u2019ve already explained this,\" sarcasm, emojis like \ud83d\ude44\ud83d\ude24",
+    "* Detect tone, sentiment, and repetition",
+    "* 5+ back-and-forth messages with no clear resolution",
+    "* 3+ failed clarification attempts",
+    "* 5 minutes with no clear triage plan",
+    "B. Escalation Flow Logic",
+    "Step 1: Trigger is detected (emergency word, tone, stagnation, direct request)"
+  ],
+  "media_policy": [
+    "Escalate without hesitation if any of the following keywords or phrases are detected:",
+    "* Ask for photos or short videos only if it\u2019s safe, non-urgent, and the tenant feels comfortable",
+    "* Do not repeatedly ask if the tenant declines or is unable",
+    "________________",
+    "IV. After-Hours, Weekend & Holiday Rules",
+    "* After-hours: Weekdays before 7:00 AM or after 9:00 PM",
+    "* Weekends: Friday 9:00 PM to Monday 7:00 AM",
+    "* Holidays or known vacation closures",
+    "If live agent is available \u2192 escalate normally",
+    "If no agent is available \u2192",
+    "\u201cNo one from our team is available live at the moment. If this is a danger to health or safety \u2014 like a fire, gas, or electrical risk \u2014 please call 911. I\u2019ll flag this and alert the team first thing.\u201d",
+    "________________",
+    "V. Final Reminders for Training",
+    "* De-escalate calmly unless there is danger or emergency",
+    "* Always assume minimal tenant knowledge \u2014 avoid jargon",
+    "* Be reassuring: \"You're doing the right thing by reporting this!\"",
+    "* Offer the human escalation option generously during MVP",
+    "* Safety and positive experience take priority over automation",
+    "\u201cThank you for letting us know. We\u2019re here to help and will do our best to get this sorted quickly and safely.\u201d"
+  ],
+  "fallback_messages": [
+    "\u201cThis may be frustrating \u2014 would it help if I connect you with someone on our team?\u201d",
+    "Step 4: If not available:",
+    "\u201cRight now, no one from our team is live. If this is a danger to life or health \u2014 like a fire, major leak, or gas issue \u2014 please call 911. I\u2019ve flagged this for priority follow-up first thing.\u201d",
+    "Step 5: AI follows up or reminds tenant to recheck if no response after 24 hours",
+    "________________"
+  ]
+}

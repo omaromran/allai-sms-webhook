@@ -1,0 +1,57 @@
+{
+  "clusters": [
+    {
+      "name": "Power Loss (Partial or Full)",
+      "examples": [
+        "No power in the entire unit",
+        "Power outage in kitchen or bedroom",
+        "Flickering lights before full loss"
+      ],
+      "triage_questions": [
+        "Ask when the issue started",
+        "Clarify if it\u2019s full unit or partial",
+        "Ask if neighbors are also affected",
+        "Request a photo of breaker panel if safe",
+        "Ask if tenant reset any breakers"
+      ],
+      "escalation_rules": {
+        "emergency": [
+          "Emergency: Full power loss or tenant has medical needs"
+        ],
+        "same_day": [
+          "Same-Day: Partial outage affecting fridge, stove, heat"
+        ],
+        "next_day": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "Exposed Wires or Sparking",
+      "examples": [
+        "Exposed wires from ceiling or outlet",
+        "Sparks when plugging in a device",
+        "Outlet feels hot"
+      ],
+      "triage_questions": [
+        "Ask how long it\u2019s been happening",
+        "Ask if anything was moved/installed recently",
+        "Prompt for photo if safe",
+        "Ask if power is still flowing to the outlet"
+      ],
+      "escalation_rules": {
+        "emergency": [
+          "Emergency: Any sparking, burning smell, or hot outlet"
+        ],
+        "next_day": [
+          ""
+        ]
+      }
+    }
+  ],
+  "media_prompts": {
+    "photo": "\ud83d\udcf8 Photo: A quick photo of the breaker or outlet helps a lot",
+    "video": "\ud83c\udfa5 Video: If lights are flickering or sparking, short video helps",
+    "audio": "\ud83c\udfa4 Audio: Buzzing or humming? A short audio clip helps us assess"
+  }
+}
