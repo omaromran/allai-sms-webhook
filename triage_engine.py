@@ -136,5 +136,36 @@ def classify_issue(message):
     }
 
 def should_bypass_landlord(triage_info, media_present=False):
-    # Your implementation
+    message = triage_info["message"].lower()
+    urgency = triage_info.get("urgency", "normal")
+
+    print("\n🔍 Escalation Debug Info:")
+    print(f"Message: {message}")
+    print(f"Urgency: {urgency}")
+    print(f"Media Present: {media_present}")
+
+    # 1. Emergency keyword match
+    for keyword in ESCALATION_RULES.get("emergency_keywords", []):
+        if keyword.lower() in message:
+            print(f"⚠️ Emergency keyword triggered: '{keyword}'")
+            return True
+
+    # 2. Urgency phrases
+    for phrase in ESCALATION_RULES.get("urgency_phrases", []):
+        if phrase.lower() in message:
+            print(f"⚠️ Urgency phrase triggered: '{phrase}'")
+            return True
+
+    # 3. Time-based escalation
+    now = datetime.now()
+    if now.hour < 7 or now.hour >= 21 or now.weekday() >= 5:
+        print("⏰ Escalation due to after-hours or weekend")
+        return True
+
+    # 4. High urgency + no media
+    if urgency == "high" and not media_present:
+        print("📸 Urgent issue reported without media — escalating for review")
+        return True
+
+    print("✅ No escalation triggered.")
     return False
