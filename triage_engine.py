@@ -71,6 +71,16 @@ def classify_issue(message):
             break
 
     if not best_cluster:
+        # Semantic match fallback
+        categories = list(CATEGORY_DATA.keys())
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You're a classifier for maintenance issue types."},
+                {"role": "user", "content": f"Which of the following categories best fits this message: '{message}'?\nOptions: {categories}\nRespond with just the category name."}
+            ]
+        )
+        best_category = response.choices[0].message.content.strip().lower()
         best_cluster = {
             "name": "Unknown",
             "examples": [],
