@@ -263,7 +263,7 @@ def media_upload():
 
     # run vision & store diagnosis
     vision_resp = client.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4o",
         messages=[
             {"role": "system",
              "content": "You are an expert at diagnosing HVAC and home-maintenance images."},
