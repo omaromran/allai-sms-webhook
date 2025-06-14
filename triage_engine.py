@@ -1,16 +1,20 @@
-import json, os
-from datetime import datetime
+# ✅ FILE: triage_engine.py
+
+import os
+import json
 import difflib
+from datetime import datetime
 
 TRIAGE_DATA_DIR = "triage_data"
 CATEGORY_DATA = {}
 ESCALATION_RULES = {}
 
-# Load triage data
+# Load all triage category JSONs
 for filename in os.listdir(TRIAGE_DATA_DIR):
     if filename.endswith(".json") and filename != "escalation_rules.json":
+        category = filename.replace(".json", "")
         with open(os.path.join(TRIAGE_DATA_DIR, filename)) as f:
-            CATEGORY_DATA[filename] = json.load(f)
+            CATEGORY_DATA[category] = json.load(f)
 
 # Load escalation rules
 try:
@@ -19,6 +23,7 @@ try:
 except Exception as e:
     print("⚠️ Failed to load escalation_rules.json:", e)
 
+
 def fuzzy_match(message, examples, threshold=0.6):
     for example in examples:
         similarity = difflib.SequenceMatcher(None, example.lower(), message.lower()).ratio()
@@ -26,8 +31,14 @@ def fuzzy_match(message, examples, threshold=0.6):
             return True
     return False
 
+def clean_message(text):
+    text = text.lower().strip()
+    if text.startswith("new issue:"):
+        text = text.replace("new issue:", "").strip()
+    return text
+
 def classify_issue(message):
-    message_lower = message.lower()
+    message = clean_message(message)
     best_category = "other"
     best_cluster = None
 
@@ -48,14 +59,14 @@ def classify_issue(message):
             "escalation_rules": {},
         }
 
-    urgency = "high" if any(word in message_lower for word in ["urgent", "asap", "immediately", "critical", "major"]) else "normal"
+    urgency = "high" if any(word in message for word in ["urgent", "asap", "immediately", "critical", "major"]) else "normal"
 
     triage_info = {
         "category": best_category,
-        "cluster": best_cluster["name"],
+        "cluster": best_cluster.get("name"),
         "urgency": urgency,
-        "followup_questions": best_cluster["triage_questions"],
-        "message": message,
+        "followup_questions": best_cluster.get("triage_questions", []),
+        "message": message
     }
 
     triage_info["should_escalate"] = should_bypass_landlord(triage_info)
@@ -64,6 +75,9 @@ def classify_issue(message):
 def should_bypass_landlord(triage_info, media_present=False):
     message = triage_info.get("message", "").lower()
     urgency = triage_info.get("urgency", "normal")
+
+    if not message:
+        print("⚠️ Warning: 'message' key missing from triage_info.")
 
     print("\n🔍 Escalation Debug Info:")
     print(f"Message: {message}")
@@ -80,11 +94,7 @@ def should_bypass_landlord(triage_info, media_present=False):
             print(f"⚠️ Urgency phrase triggered: '{phrase}'")
             return True
 
-    # ⛔️ TEMPORARILY DISABLED:
-    # now = datetime.now()
-    # if now.hour < 7 or now.hour >= 21 or now.weekday() >= 5:
-    #     print("⏰ Escalation due to after-hours or weekend")
-    #     return True
+    # Remove time-based escalation logic for now
 
     if urgency == "high" and not media_present:
         print("📸 Urgent issue reported without media — escalating for review")
