@@ -1,3 +1,11 @@
+import socket
+
+# 🔧 Force all DNS resolutions to use IPv4 (to prevent httplib2 timeouts)
+orig_getaddrinfo = socket.getaddrinfo
+def force_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    return orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+socket.getaddrinfo = force_ipv4_getaddrinfo
+
 # ingestion_script.py
 import json, os, io, difflib
 from dotenv import load_dotenv
@@ -18,12 +26,20 @@ def get_drive_service():
         SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('drive', 'v3', credentials=creds)
 
+import socket
+socket.setdefaulttimeout(30)  # set timeout to 10 seconds
+
 def list_category_folders(service):
     query = f"'{TRIAGE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder'"
-    results = service.files().list(q=query, fields="files(id, name)").execute()
-    folders = results.get('files', [])
-    print("📁 Found subfolders:", [f"{f['name']} ({f['id']})" for f in folders])
-    return folders
+    print("📡 Running Drive query:", query)
+    try:
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        folders = results.get('files', [])
+        print("📁 Found subfolders:", [f"{f['name']} ({f['id']})" for f in folders])
+        return folders
+    except Exception as e:
+        print("❌ Error during Drive query:", e)
+        return []
 
 def export_google_doc_as_text(service, file_id):
     request = service.files().export_media(fileId=file_id, mimeType='text/plain')

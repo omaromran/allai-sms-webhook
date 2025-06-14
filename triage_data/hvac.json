@@ -27,7 +27,8 @@
         "next_day": [
           "Next-Day: Mild inconsistencies",
           "Next-Day: Noise or minor airflow issues",
-          "Next-Day: Settings, filters, or minor diagnostics needed"
+          "Next-Day: Settings, filters, or minor diagnostics needed",
+          ""
         ]
       }
     },
@@ -45,6 +46,9 @@
       "escalation_rules": {
         "same_day": [
           "Same-Day: Thermostat or zone-specific failures"
+        ],
+        "next_day": [
+          ""
         ]
       }
     },
@@ -59,14 +63,15 @@
       ],
       "escalation_rules": {
         "next_day": [
-          "Next-Day: Filter change or blocked vent issues"
+          "Next-Day: Filter change or blocked vent issues",
+          ""
         ]
       }
     }
   ],
   "media_prompts": {
-    "photo": "\ud83d\udcf8 Photo: Could you send a quick photo of the thermostat or HVAC system?",
-    "video": "\ud83c\udfa5 Video: Can you record the sound it\u2019s making?",
-    "audio": "\ud83c\udfa4 Audio: Would you be able to show us what the unit display looks like?"
+    "photo": "- \ud83d\udcf8 Photo: Could you send a quick photo of the thermostat or HVAC system?",
+    "video": "- \ud83c\udfa5 Video: Can you record the sound it\u2019s making?",
+    "audio": "- \ud83c\udfa4 Audio: Would you be able to show us what the unit display looks like?"
   }
 }

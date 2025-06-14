@@ -145,6 +145,7 @@ def vonage_whatsapp():
         print("Message from WhatsApp user:", msg)
 
         triage = classify_issue(msg)
+        print("🔎 Triage Output:", json.dumps(triage, indent=2))
         issue_id, record_id, is_new = get_or_create_issue(user_number, msg, triage)
 
         # Retrieve Airtable record to check media flag

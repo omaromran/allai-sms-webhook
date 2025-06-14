@@ -10,7 +10,7 @@ ESCALATION_RULES = {}
 for filename in os.listdir(TRIAGE_DATA_DIR):
     if filename.endswith(".json") and filename != "escalation_rules.json":
         with open(os.path.join(TRIAGE_DATA_DIR, filename)) as f:
-            CATEGORY_DATA[filename.replace(".json", "")] = json.load(f)
+            CATEGORY_DATA[filename] = json.load(f)
 
 # Load escalation rules
 try:
