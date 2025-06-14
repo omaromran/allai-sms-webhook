@@ -4,7 +4,11 @@
       "name": "No Heat or System Failure",
       "examples": [
         "The heat isn\u2019t working at all.",
-        "The air feels cold."
+        "The air feels cold.",
+        "There's no heat and it's freezing",
+        "The house is freezing and the heater won't start",
+        "The heat is not working",
+        "There is no heating"
       ],
       "triage_questions": [
         "Is the unit blowing cold air, or not blowing air at all?",
