@@ -172,10 +172,10 @@ def should_bypass_landlord(triage_info, media_present=False):
             return True
 
     # 3. Time-based escalation
-    now = datetime.now()
-    if now.hour < 7 or now.hour >= 21 or now.weekday() >= 5:
-        print("⏰ Escalation due to after-hours or weekend")
-        return True
+    # now = datetime.now()
+    # if now.hour < 7 or now.hour >= 21 or now.weekday() >= 5:
+    #     print("⏰ Escalation due to after-hours or weekend")
+    #     return True
 
     # 4. High urgency + no media
     if urgency == "high" and not media_present:
