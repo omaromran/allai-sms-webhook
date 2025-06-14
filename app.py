@@ -248,7 +248,7 @@ def vonage_whatsapp():
 @app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
     if request.method == "OPTIONS":
-        return '', 200
+        return "", 200
 
     data = request.get_json()
     issue_id = data.get("issue_id")
@@ -257,55 +257,42 @@ def media_upload():
     if not issue_id or not media_urls:
         return {"error": "Missing issue_id or media_urls"}, 400
 
+    # 1️⃣ Look up the Airtable record
     search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
-    headers = {
-        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    params = {
-        "filterByFormula": f"{{Issue ID}}='{issue_id}'"
-    }
-    response = requests.get(search_url, headers=headers, params=params)
-    records = response.json().get("records", [])
-
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    params = {"filterByFormula": f"{{Issue ID}}='{issue_id}'"}
+    resp = requests.get(search_url, headers=headers, params=params)
+    records = resp.json().get("records", [])
     if not records:
         return {"error": "Issue ID not found"}, 404
 
-    record_id = records[0]["id"]
-    image_url = media_urls[0]
+    record = records[0]
+    record_id = record["id"]
 
-    print("🧠 Analyzing image:", image_url)
-    try:
-        vision_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful maintenance technician. Review the image and suggest possible causes or fixes for the issue."
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What might be wrong in this picture?"},
-                        {"type": "image_url", "image_url": {"url": image_url}}
-                    ]
-                }
-            ]
-        )
-        diagnosis = vision_response.choices[0].message.content.strip()
-    except Exception as e:
-        print("❌ Vision API failed:", str(e))
-        diagnosis = "Image received, but the system was unable to analyze it. A human will follow up."
-
+    # 2️⃣ Attach media & mark submitted
+    attachments = [{"url": url} for url in media_urls]
     patch_url = f"{search_url}/{record_id}"
-    payload = {
-        "fields": {
-            "Media": [{"url": image_url}],
-            "Media Submitted": True,
-            "AI Diagnosis": diagnosis
-        }
-    }
-    update_resp = requests.patch(patch_url, headers=headers, json=payload)
-    print("Airtable update status:", update_resp.status_code, update_resp.text)
+    payload = {"fields": {"Media": attachments, "Media Submitted": True}}
+    requests.patch(patch_url, headers=headers, json=payload)
 
-    return {"status": "success", "diagnosis": diagnosis}, 200
+    # 3️⃣ Grab back the AI Diagnosis from Airtable
+    #    (Assuming your triage_engine wrote it into the "AI Diagnosis" field)
+    time.sleep(1)  # small delay to ensure write propagates
+    fresh = requests.get(f"{search_url}/{record_id}", headers=headers).json().get("fields", {})
+    ai_diag = fresh.get("AI Diagnosis", "Thanks – we got your image and are looking into it.")
+
+    # 4️⃣ Send it back over Messenger/WhatsApp via Vonage
+    #    You’ll need to know which channel and dest number to use
+    #    Here’s an example for Messenger:
+    voicemail = {
+      "from": {"type":"messenger","id":"699775536544257"},
+      "to":   {"type":"messenger","id": record["fields"].get("Phone")},
+      "message": {"content":{"type":"text","text": ai_diag}}
+    }
+    requests.post(
+      "https://api.nexmo.com/v0.1/messages",
+      json=voicemail,
+      auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
+    )
+
+    return {"status":"success"}, 200
