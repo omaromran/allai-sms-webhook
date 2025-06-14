@@ -4,6 +4,7 @@ from openai import OpenAI
 import os
 import requests
 import json
+import time
 from triage_engine import classify_issue, should_bypass_landlord
 from datetime import datetime
 import smtplib
@@ -33,12 +34,16 @@ def generate_issue_id():
 
 def is_new_issue(message):
     message = message.lower()
-    return any(phrase in message for phrase in ["new issue", "another issue", "different problem", "new problem"])
+    return any(phrase in message for phrase in [
+        "new issue", "another issue", "different problem", "new problem"
+    ])
 
 
 def is_resolved(message):
     message = message.lower()
-    return any(phrase in message for phrase in ["fixed", "resolved", "no longer", "no issue", "solved", "it’s all good"])
+    return any(phrase in message for phrase in [
+        "fixed", "resolved", "no longer", "no issue", "solved", "it’s all good"
+    ])
 
 
 def get_unit_for_phone(phone):
@@ -47,66 +52,74 @@ def get_unit_for_phone(phone):
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
-    params = {
-        "filterByFormula": f"{{Phone}}='{phone}'"
-    }
-    response = requests.get(url, headers=headers, params=params)
-    records = response.json().get("records", [])
-
-    if records:
-        return records[0]["fields"].get("Unit", "Unknown")
-    else:
-        return "Unknown"
+    params = {"filterByFormula": f"{{Phone}}='{phone}'"}
+    resp = requests.get(url, headers=headers, params=params).json()
+    records = resp.get("records", [])
+    return records[0]["fields"].get("Unit", "Unknown") if records else "Unknown"
 
 
 def notify_l1_via_gmail(issue_id, summary, category, urgency, record_id, unit):
     airtable_link = f"https://airtable.com/{AIRTABLE_BASE_ID}/{record_id}"
     body = f"""
-    🚨 Escalated Maintenance Issue: {issue_id}
+🚨 Escalated Maintenance Issue: {issue_id}
 
-    Unit: {unit}
-    Summary: {summary}
-    Category: {category}
-    Urgency: {urgency}
+Unit: {unit}
+Summary: {summary}
+Category: {category}
+Urgency: {urgency}
 
-    View in Airtable: {airtable_link}
-    """
-
+View in Airtable: {airtable_link}
+"""
     msg = MIMEText(body)
     msg["Subject"] = f"🚨 Escalated Issue: {issue_id}"
     msg["From"] = GMAIL_USER
     msg["To"] = L1_EMAIL
 
-    with smtpllib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_PASS)
         server.send_message(msg)
-
     print("📧 L1 email alert sent via Gmail")
 
 
-def get_or_create_issue(phone, message):
+def get_or_create_issue(phone, message, triage=None):
+    """
+    triage only needed for new issues.
+    returns: (issue_id, record_id, is_new)
+    """
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
     params = {
-        "filterByFormula": f"AND({{Phone}}='{phone}', OR({{Status}}='Open', {{Status}}='Escalated'))"
+        "filterByFormula":
+        f"AND({{Phone}}='{phone}', OR({{Status}}='Open', {{Status}}='Escalated'))"
     }
-    response = requests.get(url, headers=headers, params=params)
-    records = response.json().get("records", [])
+    resp = requests.get(url, headers=headers, params=params).json()
+    records = resp.get("records", [])
 
     if records and not is_new_issue(message):
-        record = records[0]
-        issue_id = record["fields"].get("Issue ID", "Unknown")
-        category = record["fields"].get("Category", "other")
-        record_id = record["id"]
+        rec = records[0]
+        issue_id = rec["fields"].get("Issue ID", "Unknown")
         print(f"📌 Found existing issue ID: {issue_id}")
-        return issue_id, record_id, False, category
+        return issue_id, rec["id"], False
 
+    # new issue
     issue_id = generate_issue_id()
-    category = None
-    return issue_id, None, True, category
+    fields = {
+        "Issue ID": issue_id,
+        "Phone": phone,
+        "Message Summary": message[:50],
+        "Message": message,
+        "Category": triage["category"],
+        "Urgency": triage["urgency"],
+        "Escalated": triage["should_escalate"],
+        "Follow-ups": "\n".join(triage["followup_questions"]),
+        "Status": "Open"
+    }
+    create_resp = requests.post(url, headers=headers, json={"fields": fields}).json()
+    print("🆕 Created new issue with ID:", issue_id)
+    return issue_id, create_resp.get("id"), True
 
 
 def log_issue_to_airtable(record_id, new_message, mark_resolved=False):
@@ -115,20 +128,16 @@ def log_issue_to_airtable(record_id, new_message, mark_resolved=False):
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
+    get_resp = requests.get(url, headers=headers).json()
+    current = get_resp.get("fields", {}).get("Message", "")
+    full = (current + "\n" + new_message).strip()
 
-    get_resp = requests.get(url, headers=headers)
-    current_message = get_resp.json().get("fields", {}).get("Message", "")
-    full_message = (current_message + "\n" + new_message).strip()
-
-    updates = { "Message": full_message }
+    updates = {"Message": full}
     if mark_resolved:
         updates["Status"] = "Resolved"
 
-    try:
-        response = requests.patch(url, headers=headers, json={"fields": updates})
-        print("Airtable update status:", response.status_code, response.text)
-    except Exception as e:
-        print("❌ Airtable update failed:", str(e))
+    resp = requests.patch(url, headers=headers, json={"fields": updates})
+    print("Airtable update status:", resp.status_code, resp.text)
 
 
 @app.route("/messages", methods=["POST"])
@@ -136,163 +145,141 @@ def vonage_whatsapp():
     data = request.get_json()
     print("Incoming WhatsApp:", data)
 
+    msg = data.get("text", "")
+    user_number = data.get("from")
+    print("Message from user:", msg)
+
+    # classification & triage
+    triage = classify_issue(msg)
+    issue_id, record_id, is_new = get_or_create_issue(user_number, msg, triage=triage)
+
+    # check if media already submitted
+    record_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}/{record_id}"
+    media_submitted = False
     try:
-        msg = data.get("text")
-        user_number = data.get("from")
-        print("Message from WhatsApp user:", msg)
+        fields = requests.get(record_url,
+                              headers={
+                                  "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+                                  "Content-Type": "application/json"
+                              }).json().get("fields", {})
+        media_submitted = fields.get("Media Submitted", False)
+    except:
+        pass
 
-        issue_id, record_id, is_new, existing_category = get_or_create_issue(user_number, msg)
+    # escalation logic
+    should_escalate = should_bypass_landlord(triage, media_present=media_submitted)
+    resolved = is_resolved(msg)
 
-        if is_new:
-            triage = classify_issue(msg)
-        else:
-            triage = classify_issue(msg, category_override=existing_category)
+    if should_escalate:
+        unit = get_unit_for_phone(user_number)
+        notify_l1_via_gmail(issue_id, msg[:50], triage["category"],
+                            triage["urgency"], record_id, unit)
 
-        record_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}/{record_id}"
-        headers = {
-            "Authorization": f"Bearer {AIRTABLE_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        media_submitted = False
-        try:
-            r = requests.get(record_url, headers=headers)
-            fields = r.json().get("fields", {})
-            media_submitted = fields.get("Media Submitted", False)
-        except:
-            pass
-
-        should_escalate = should_bypass_landlord(triage, media_present=media_submitted)
-        resolved = is_resolved(msg)
-
-        if is_new:
-            fields = {
-                "Issue ID": issue_id,
-                "Phone": user_number,
-                "Message Summary": msg[:50],
-                "Message": msg,
-                "Category": triage["category"],
-                "Urgency": triage["urgency"],
-                "Escalated": should_escalate,
-                "Follow-ups": "\n".join(triage["followup_questions"]),
-                "Status": "Open"
-            }
-            url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
-            create_response = requests.post(url, headers=headers, json={"fields": fields})
-            record_id = create_response.json().get("id")
-            print("🆕 Created new issue with ID:", issue_id)
-
-        if should_escalate:
-            unit = get_unit_for_phone(user_number)
-            notify_l1_via_gmail(issue_id, msg[:50], triage["category"], triage["urgency"], record_id, unit)
-
-        if resolved:
-            log_issue_to_airtable(record_id, msg, mark_resolved=True)
-            reply = f"Thanks for letting me know! I’ve marked issue {issue_id} as resolved. Let me know if you need anything else."
-        else:
-            escalation_instruction = (
-                f"🚨 This issue has been escalated to our maintenance team and flagged as urgent."
-                if should_escalate else
-                f"I understand you're reporting a {triage['category']} issue. Let me gather more details to assist you."
-            )
-
-            triage_prompt = (
-                f"You are Allai, a helpful assistant for home maintenance.\n"
-                f"Category: {triage['category']}\n"
-                f"Cluster: {triage.get('cluster', 'Unknown')}\n"
-                f"Urgency: {triage['urgency']}\n"
-                f"{escalation_instruction}\n"
-                f"Ask the following:\n- " + "\n- ".join(triage['followup_questions'])
-            )
-
-            gpt_reply = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": triage_prompt},
-                    {"role": "user", "content": msg}
-                ]
-            ).choices[0].message.content
-
-            reply = gpt_reply
-            if triage["category"] in VISUAL_CATEGORIES and not media_submitted:
-                reply += f"\n\n📸 If possible, upload a photo of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}\nThen return to this chat."
-
-            log_issue_to_airtable(record_id, msg)
-
-        channel = data.get("channel")
-        if channel == "messenger":
-            payload = {
-                "from": {"type": "messenger", "id": "699775536544257"},
-                "to": {"type": "messenger", "id": data["from"]},
-                "message": {"content": {"type": "text", "text": reply}}
-            }
-        elif channel == "whatsapp":
-            payload = {
-                "from": {"type": "whatsapp", "number": "15557817931"},
-                "to": {"type": "whatsapp", "number": data["from"]},
-                "message": {"content": {"type": "text", "text": reply}}
-            }
-
-        response = requests.post(
-            "https://api.nexmo.com/v0.1/messages",
-            json=payload,
-            auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
+    if resolved:
+        log_issue_to_airtable(record_id, msg, mark_resolved=True)
+        reply = f"Thanks! I’ve marked issue {issue_id} as resolved."
+    else:
+        # build follow-up prompt
+        escalation_txt = (
+            "🚨 This has been escalated and flagged as urgent."
+            if should_escalate else
+            f"I understand you’re reporting a {triage['category']} issue."
         )
-        print("Vonage send status:", response.status_code, response.text)
-        return "ok"
+        prompt = (
+            f"You are Allai, a property-maintenance assistant.\n"
+            f"Category: {triage['category']}\n"
+            f"Urgency: {triage['urgency']}\n"
+            f"{escalation_txt}\n"
+            f"Ask:\n- " + "\n- ".join(triage["followup_questions"])
+        )
 
-    except Exception as e:
-        print("Error:", e)
-        return "error", 500
+        gpt_resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": msg}
+            ]
+        ).choices[0].message.content
+
+        reply = gpt_resp
+        if triage["category"] in VISUAL_CATEGORIES and not media_submitted:
+            reply += (
+                f"\n\n📸 Please upload a photo of the issue here:\n"
+                f"https://allai-upload.web.app?issue_id={issue_id}\n"
+                "Then return to this chat."
+            )
+
+        log_issue_to_airtable(record_id, msg)
+
+    # send out via Vonage
+    out = {
+        "from": {"type": data["channel"], "id": "699775536544257"},
+        "to": {"type": data["channel"], "id": user_number},
+        "message": {"content": {"type": "text", "text": reply}}
+    }
+    resp = requests.post("https://api.nexmo.com/v0.1/messages",
+                         json=out,
+                         auth=(VONAGE_API_KEY, VONAGE_API_SECRET))
+    print("Vonage send status:", resp.status_code, resp.text)
+    return "ok"
 
 
 @app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
+    # CORS preflight
     if request.method == "OPTIONS":
         return "", 200
 
     data = request.get_json()
     issue_id = data.get("issue_id")
     media_urls = data.get("media_urls", [])
-
     if not issue_id or not media_urls:
         return {"error": "Missing issue_id or media_urls"}, 400
 
-    # 1️⃣ Look up the Airtable record
-    search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
-    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    params = {"filterByFormula": f"{{Issue ID}}='{issue_id}'"}
-    resp = requests.get(search_url, headers=headers, params=params)
-    records = resp.json().get("records", [])
-    if not records:
-        return {"error": "Issue ID not found"}, 404
-
-    record = records[0]
-    record_id = record["id"]
-
-    # 2️⃣ Attach media & mark submitted
-    attachments = [{"url": url} for url in media_urls]
-    patch_url = f"{search_url}/{record_id}"
-    payload = {"fields": {"Media": attachments, "Media Submitted": True}}
-    requests.patch(patch_url, headers=headers, json=payload)
-
-    # 3️⃣ Grab back the AI Diagnosis from Airtable
-    #    (Assuming your triage_engine wrote it into the "AI Diagnosis" field)
-    time.sleep(1)  # small delay to ensure write propagates
-    fresh = requests.get(f"{search_url}/{record_id}", headers=headers).json().get("fields", {})
-    ai_diag = fresh.get("AI Diagnosis", "Thanks – we got your image and are looking into it.")
-
-    # 4️⃣ Send it back over Messenger/WhatsApp via Vonage
-    #    You’ll need to know which channel and dest number to use
-    #    Here’s an example for Messenger:
-    voicemail = {
-      "from": {"type":"messenger","id":"699775536544257"},
-      "to":   {"type":"messenger","id": record["fields"].get("Phone")},
-      "message": {"content":{"type":"text","text": ai_diag}}
+    # find record
+    base = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
+    headers = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
     }
-    requests.post(
-      "https://api.nexmo.com/v0.1/messages",
-      json=voicemail,
-      auth=(VONAGE_API_KEY, VONAGE_API_SECRET)
-    )
+    recs = requests.get(base,
+                        headers=headers,
+                        params={"filterByFormula": f"{{Issue ID}}='{issue_id}'"}
+                       ).json().get("records", [])
+    if not recs:
+        return {"error": "Issue ID not found"}, 404
+    record_id = recs[0]["id"]
 
-    return {"status":"success"}, 200
+    # attach media
+    attachments = [{"url": url} for url in media_urls]
+    payload = {"fields": {"Media": attachments, "Media Submitted": True}}
+    update = requests.patch(f"{base}/{record_id}",
+                            headers=headers,
+                            json=payload)
+    print("Media upload Airtable status:", update.status_code, update.text)
+
+    # slight delay to ensure Airtable write
+    time.sleep(1)
+
+    # run vision & store diagnosis
+    vision_resp = client.chat.completions.create(
+        model="gpt-4-vision-preview",
+        messages=[
+            {"role": "system",
+             "content": "You are an expert at diagnosing HVAC and home-maintenance images."},
+            {"role": "user",
+             "content": f"Analyze this image and suggest what’s wrong and how to fix it:\n{media_urls[0]}"}
+        ]
+    ).choices[0].message.content
+
+    # write back to Airtable
+    patch = requests.patch(f"{base}/{record_id}",
+                           headers=headers,
+                           json={"fields": {"AI Diagnosis": vision_resp}})
+    print("Airtable AI diagnosis status:", patch.status_code, patch.text)
+
+    return {"status": "success"}, 200
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
