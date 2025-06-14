@@ -192,7 +192,7 @@ def incoming():
 # ---- MEDIA UPLOAD CALLBACK ----
 @app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
-    # 1) CORS preflight
+    # CORS preflight
     if request.method == "OPTIONS":
         return "", 200
 
@@ -202,7 +202,7 @@ def media_upload():
     if not issue_id or not media_urls:
         return jsonify(error="Missing issue_id or media_urls"), 400
 
-    # 2) Find the Airtable record
+    # find the record
     base = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE}"
     hdr  = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -216,11 +216,11 @@ def media_upload():
     if not recs:
         return jsonify(error="Issue ID not found"), 404
 
-    rec = recs[0]
-    rec_id     = rec["id"]
+    rec    = recs[0]
+    rec_id = rec["id"]
     user_phone = rec["fields"].get("Phone")
 
-    # 3) Attach the media and mark submitted
+    # attach media & flag
     attachments = [{"url": u} for u in media_urls]
     requests.patch(
         f"{base}/{rec_id}",
@@ -229,24 +229,32 @@ def media_upload():
     )
     print("Media uploaded to Airtable")
 
-    # 4) Tiny delay so Airtable write settles
+    # tiny delay
     time.sleep(1)
 
-    # 5) Build a plain-text prompt including the image URL
+    # build the vision messages
     img_url = media_urls[0]
-    prompt = (
-        "You are an expert home-maintenance technician.\n"
-        "Please analyze the following image and tell me what's wrong and how to fix it:\n"
-        f"{img_url}"
-    )
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an expert HVAC/home-maintenance technician. Diagnose what’s wrong in the image and explain how to fix it."
+        },
+        {
+            "role": "user",
+            "content": {
+                "type": "image_url",
+                "image_url": img_url
+            }
+        }
+    ]
 
-    # 6) Run GPT on that prompt (no nested content objects!)
+    # call GPT-4o vision
     vision_resp = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "system", "content": prompt}]
+        messages=messages
     ).choices[0].message.content
 
-    # 7) Write the diagnosis back into Airtable
+    # write diagnosis back
     requests.patch(
         f"{base}/{rec_id}",
         headers=hdr,
@@ -254,10 +262,10 @@ def media_upload():
     )
     print("AI diagnosis written to Airtable")
 
-    # 8) Let the user know right away
+    # immediately notify the user
     followup = (
-        f"✅ Got the image! Here’s what I see:\n\n{vision_resp}\n\n"
-        "Feel free to come back to the chat if you have any more questions."
+        f"✅ Got the photo! Here’s what I see:\n\n{vision_resp}\n\n"
+        "Feel free to return to this chat if you have any more questions."
     )
     send_vonage(user_phone, followup, channel="messenger")
 
