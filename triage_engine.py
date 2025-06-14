@@ -105,16 +105,38 @@ def should_bypass_landlord(triage_info, media_present=False):
     print(f"Urgency: {urgency}")
     print(f"Media Present: {media_present}")
 
+    # 0. User explicitly asks to escalate or speak to a human
+    override_phrases = [
+        "escalate",
+        "talk to someone",
+        "talk to a human",
+        "talk to a person",
+        "connect me to an agent",
+        "i want to talk to someone",
+        "real person",
+        "real agent",
+        "get someone",
+        "human support"
+    ]
+    if any(phrase in message for phrase in override_phrases):
+        print("🛑 Escalation override: user explicitly requested human/agent.")
+        return True
+
+    # 1. Emergency keyword match
     for keyword in ESCALATION_RULES.get("emergency_keywords", []):
         if keyword.lower() in message:
             print(f"⚠️ Emergency keyword triggered: '{keyword}'")
             return True
 
+    # 2. Urgency phrases
     for phrase in ESCALATION_RULES.get("urgency_phrases", []):
         if phrase.lower() in message:
             print(f"⚠️ Urgency phrase triggered: '{phrase}'")
             return True
 
+    # 3. Time-based escalation (currently disabled)
+
+    # 4. High urgency + no media
     if urgency == "high" and not media_present:
         print("📸 Urgent issue reported without media — escalating for review")
         return True
