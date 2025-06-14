@@ -242,44 +242,46 @@ def media_upload():
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
         "Content-Type": "application/json"
     }
-    recs = requests.get(base,
-                        headers=headers,
-                        params={"filterByFormula": f"{{Issue ID}}='{issue_id}'"}
-                       ).json().get("records", [])
+    recs = requests.get(
+        base,
+        headers=headers,
+        params={"filterByFormula": f"{{Issue ID}}='{issue_id}'"}
+    ).json().get("records", [])
     if not recs:
         return {"error": "Issue ID not found"}, 404
     record_id = recs[0]["id"]
 
-    # attach media
+    # attach media (image only)
     attachments = [{"url": url} for url in media_urls]
     payload = {"fields": {"Media": attachments, "Media Submitted": True}}
-    update = requests.patch(f"{base}/{record_id}",
-                            headers=headers,
-                            json=payload)
+    update = requests.patch(f"{base}/{record_id}", headers=headers, json=payload)
     print("Media upload Airtable status:", update.status_code, update.text)
 
     # slight delay to ensure Airtable write
     time.sleep(1)
 
-    # run vision & store diagnosis
-    vision_resp = client.chat.completions.create(
+    # run vision analysis with GPT-4o
+    image_url = media_urls[0]
+    vision_prompt = (
+        "You are an expert HVAC and home-maintenance technician. "
+        "Analyze the following image URL, describe what you see, "
+        "and suggest troubleshooting steps:\n"
+        f"{image_url}"
+    )
+    ai_diagnosis = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system",
-             "content": "You are an expert at diagnosing HVAC and home-maintenance images."},
-            {"role": "user",
-             "content": f"Analyze this image and suggest what’s wrong and how to fix it:\n{media_urls[0]}"}
+            {"role": "system", "content": vision_prompt}
         ]
     ).choices[0].message.content
 
-    # write back to Airtable
-    patch = requests.patch(f"{base}/{record_id}",
-                           headers=headers,
-                           json={"fields": {"AI Diagnosis": vision_resp}})
+    # write back the AI diagnosis to Airtable
+    patch = requests.patch(
+        f"{base}/{record_id}",
+        headers=headers,
+        json={"fields": {"AI Diagnosis": ai_diagnosis}}
+    )
     print("Airtable AI diagnosis status:", patch.status_code, patch.text)
 
-    return {"status": "success"}, 200
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    # respond so frontend can notify the user
+    return {"status": "success", "diagnosis": ai_diagnosis}, 200
