@@ -202,7 +202,7 @@ def vonage_whatsapp():
             )
                         
             if triage["category"] in VISUAL_CATEGORIES and not media_submitted:
-                reply += f"\n\n📸 If possible, upload a photo or video of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}"
+                reply += f"\n\n📸 Please upload a photo of the issue here:\nhttps://allai-upload.web.app?issue_id={issue_id}\nOnce uploaded, come back here to continue the conversation."
 
             log_issue_to_airtable(record_id, msg)
 
@@ -265,16 +265,20 @@ def media_upload():
     image_url = media_urls[0]  # Use first image
     print(f"🧠 Analyzing image: {image_url}")
 
+    print("🧠 Sending image to GPT-4o for analysis...")
     vision_response = client.chat.completions.create(
-        model="gpt-4-vision-preview",
+    model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an expert in home maintenance and repairs. Given the image, explain what's likely wrong and suggest a repair or next step."},
-            {"role": "user", "content": [
-                {"type": "text", "text": "What does this image show and what can be done to fix the issue?"},
-                {"type": "image_url", "image_url": {"url": image_url}}
-            ]}
+            {"role": "system", "content": "You are a maintenance diagnostic assistant. Analyze the uploaded image and describe what you see. Suggest possible causes or fixes if applicable."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": media_url}},
+                    {"type": "text", "text": f"The issue ID is {issue_id}. What do you see?"}
+                ]
+            }
         ],
-        max_tokens=300
+        max_tokens=500
     )
     analysis = vision_response.choices[0].message.content
     print("🔎 OpenAI Vision Analysis:", analysis)
@@ -293,4 +297,7 @@ def media_upload():
     update_resp = requests.patch(patch_url, headers=headers, json=payload)
     print("✅ Media upload Airtable status:", update_resp.status_code, update_resp.text)
 
-    return {"status": "success", "analysis": analysis}, 200
+    return {
+        "status": "success",
+        "message": "✅ Photo received! Please return to the conversation to continue troubleshooting."
+    }, 200
