@@ -244,6 +244,7 @@ def media_upload():
     if not issue_id or not media_urls:
         return {"error": "Missing issue_id or media_urls"}, 400
 
+    # Lookup Airtable record
     search_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -259,15 +260,37 @@ def media_upload():
         return {"error": "Issue ID not found"}, 404
 
     record_id = records[0]["id"]
+
+    # Analyze image using OpenAI Vision
+    image_url = media_urls[0]  # Use first image
+    print(f"🧠 Analyzing image: {image_url}")
+
+    vision_response = client.chat.completions.create(
+        model="gpt-4-vision-preview",
+        messages=[
+            {"role": "system", "content": "You are an expert in home maintenance and repairs. Given the image, explain what's likely wrong and suggest a repair or next step."},
+            {"role": "user", "content": [
+                {"type": "text", "text": "What does this image show and what can be done to fix the issue?"},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]}
+        ],
+        max_tokens=300
+    )
+    analysis = vision_response.choices[0].message.content
+    print("🔎 OpenAI Vision Analysis:", analysis)
+
+    # Upload result to Airtable
     patch_url = f"{search_url}/{record_id}"
     attachments = [{"url": url} for url in media_urls]
     payload = {
         "fields": {
             "Media": attachments,
-            "Media Submitted": True
+            "Media Submitted": True,
+            "AI Diagnosis": analysis
         }
     }
 
     update_resp = requests.patch(patch_url, headers=headers, json=payload)
-    print("Media upload Airtable status:", update_resp.status_code, update_resp.text)
-    return {"status": "success"}, 200
+    print("✅ Media upload Airtable status:", update_resp.status_code, update_resp.text)
+
+    return {"status": "success", "analysis": analysis}, 200
