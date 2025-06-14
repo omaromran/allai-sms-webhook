@@ -190,64 +190,75 @@ def incoming():
         return "error",500
 
 # ---- MEDIA UPLOAD CALLBACK ----
-@app.route("/media-upload", methods=["POST","OPTIONS"])
+@app.route("/media-upload", methods=["POST", "OPTIONS"])
 def media_upload():
-    if request.method=="OPTIONS":
-        return "",200
+    # 1) CORS preflight
+    if request.method == "OPTIONS":
+        return "", 200
 
     data = request.get_json()
     issue_id   = data.get("issue_id")
-    media_urls = data.get("media_urls",[])
+    media_urls = data.get("media_urls", [])
     if not issue_id or not media_urls:
-        return jsonify(error="Missing issue_id or media_urls"),400
+        return jsonify(error="Missing issue_id or media_urls"), 400
 
-    # find Airtable record
+    # 2) Find the Airtable record
     base = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE}"
-    hdr  = {"Authorization":f"Bearer {AIRTABLE_TOKEN}","Content-Type":"application/json"}
-    recs = requests.get(base,headers=hdr,params={
-        "filterByFormula":f"{{Issue ID}}='{issue_id}'"
-    }).json().get("records",[])
+    hdr  = {
+        "Authorization": f"Bearer {AIRTABLE_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    recs = requests.get(
+        base,
+        headers=hdr,
+        params={ "filterByFormula": f"{{Issue ID}}='{issue_id}'" }
+    ).json().get("records", [])
     if not recs:
-        return jsonify(error="Issue ID not found"),404
+        return jsonify(error="Issue ID not found"), 404
+
     rec = recs[0]
-    rec_id = rec["id"]
+    rec_id     = rec["id"]
     user_phone = rec["fields"].get("Phone")
 
-    # attach image(s)
-    atts = [{"url":u} for u in media_urls]
-    requests.patch(f"{base}/{rec_id}",headers=hdr,json={
-        "fields":{"Media":atts,"Media Submitted":True}
-    })
-    print("Media uploaded")
+    # 3) Attach the media and mark submitted
+    attachments = [{"url": u} for u in media_urls]
+    requests.patch(
+        f"{base}/{rec_id}",
+        headers=hdr,
+        json={ "fields": { "Media": attachments, "Media Submitted": True } }
+    )
+    print("Media uploaded to Airtable")
 
-    # tiny delay
+    # 4) Tiny delay so Airtable write settles
     time.sleep(1)
 
-    # build vision prompt (GPT-4o sees images by using image_url)
-    img = media_urls[0]
-    messages = [
-        {"role":"system",
-         "content": "You are an expert HVAC/home-maintenance technician."},
-        {"role":"user",
-         "content": {"type":"image_url", "image_url":img}}
-    ]
-    resp = client.chat.completions.create(
+    # 5) Build a plain-text prompt including the image URL
+    img_url = media_urls[0]
+    prompt = (
+        "You are an expert home-maintenance technician.\n"
+        "Please analyze the following image and tell me what's wrong and how to fix it:\n"
+        f"{img_url}"
+    )
+
+    # 6) Run GPT on that prompt (no nested content objects!)
+    vision_resp = client.chat.completions.create(
         model="gpt-4o",
-        messages=messages
+        messages=[{"role": "system", "content": prompt}]
     ).choices[0].message.content
 
-    # write back AI Diagnosis
-    log_airtable(rec_id,{"AI Diagnosis":resp})
-    print("AI diagnosis written")
-
-    # immediately notify user
-    followup = (
-        f"✅ Got the picture! Here’s what I see:\n\n{resp}\n\n"
-        "Back to the chat whenever you’re ready."
+    # 7) Write the diagnosis back into Airtable
+    requests.patch(
+        f"{base}/{rec_id}",
+        headers=hdr,
+        json={ "fields": { "AI Diagnosis": vision_resp } }
     )
-    send_vonage(user_phone,followup,channel="messenger")
+    print("AI diagnosis written to Airtable")
 
-    return jsonify(status="success"),200
+    # 8) Let the user know right away
+    followup = (
+        f"✅ Got the image! Here’s what I see:\n\n{vision_resp}\n\n"
+        "Feel free to come back to the chat if you have any more questions."
+    )
+    send_vonage(user_phone, followup, channel="messenger")
 
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)))
+    return jsonify(status="success"), 200
