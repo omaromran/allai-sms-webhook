@@ -1,0 +1,45 @@
+name: Ingest & Update Knowledge Hub
+
+# Allows manual runs via the Actions tab
+on:
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ingestion script
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          TRIAGE_ROOT_FOLDER_ID: ${{ secrets.TRIAGE_ROOT_FOLDER_ID }}
+        run: |
+          # Write the service account key to a file
+          echo "${SERVICE_ACCOUNT_JSON}" > service_account.json
+          # Run your ingestion
+          python ingestion_script.py
+
+      - name: Commit updated JSON
+        run: |
+          git config user.name "Allai Bot"
+          git config user.email "bot@allai.example.com"
+          git add triage_data/*.json
+          git diff --quiet && echo "No changes to commit" || git commit -m "chore: auto-update knowledge hub JSON"
+        continue-on-error: true
+
+      - name: Push changes back
+        uses: ad-m/github-push-action@v0.6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
